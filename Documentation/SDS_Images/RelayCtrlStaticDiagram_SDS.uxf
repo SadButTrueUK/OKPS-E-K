@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <help_text/>
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>70</x>
+      <y>250</y>
+      <w>220</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>ActivityManager - модуль управления активностью
+--
+- состояние РПВ
+--
+style=wordwrap
+bg=light_gray
+fg=black
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>110</x>
+      <y>80</y>
+      <w>360</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>relayCtrl - главный модуль компонента
+--
+- управление положением РПВ
+- контроль положения РПВ
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>160</x>
+      <y>150</y>
+      <w>30</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>300</x>
+      <y>250</y>
+      <w>240</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>ControlSystem - управление работой прибора
+--
+- состояние РПВ
+- положение РПВ
+--
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>400</x>
+      <y>150</y>
+      <w>30</w>
+      <h>120</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
+  </element>
+</diagram>

@@ -1,0 +1,597 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <help_text>
+
+ActivityManager_isActive()
+
+
+
+
+
+
+lt=-&gt;
+
+</help_text>
+  <zoom_level>7</zoom_level>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>378</x>
+      <y>504</y>
+      <w>280</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>StateSafePassive
+--
+do/ ActivityManager_isActive(), ControlSystem_workConditon()
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>1064</x>
+      <y>504</y>
+      <w>280</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>StateSafeActive
+--
+do/ ActivityManager_isActive(), ControlSystem_workConditon()
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>651</x>
+      <y>546</y>
+      <w>427</w>
+      <h>28</h>
+    </coordinates>
+    <panel_attributes>ActivityManager_isActive()
+lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;20.0;590.0;20.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>651</x>
+      <y>518</y>
+      <w>427</w>
+      <h>28</h>
+    </coordinates>
+    <panel_attributes>ActivityManager_isActive()
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;20.0;590.0;20.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>630</x>
+      <y>840</y>
+      <w>224</w>
+      <h>35</h>
+    </coordinates>
+    <panel_attributes>ActivityManager_isActive()
+
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;20.0;300.0;20.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>630</x>
+      <y>875</y>
+      <w>224</w>
+      <h>35</h>
+    </coordinates>
+    <panel_attributes>ActivityManager_isActive()
+
+lt=-&gt;</panel_attributes>
+    <additional_attributes>300.0;20.0;10.0;20.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>770</x>
+      <y>1253</y>
+      <w>119</w>
+      <h>42</h>
+    </coordinates>
+    <panel_attributes>ProtectionsState</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>819</x>
+      <y>1225</y>
+      <w>21</w>
+      <h>42</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;40.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>301</x>
+      <y>630</y>
+      <w>1120</w>
+      <h>567</h>
+    </coordinates>
+    <panel_attributes>StateWorking
+--
+entry/ActMtyManager_setState()
+exit/ActivityManager_setState()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>847</x>
+      <y>273</y>
+      <w>126</w>
+      <h>126</h>
+    </coordinates>
+    <panel_attributes>DeviceAddress_isValid()
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;160.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>560</x>
+      <y>574</y>
+      <w>161</w>
+      <h>231</h>
+    </coordinates>
+    <panel_attributes>ControlSystem_workCondition()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;310.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>413</x>
+      <y>574</y>
+      <w>161</w>
+      <h>231</h>
+    </coordinates>
+    <panel_attributes>ControlSystem_workCondition()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;310.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1099</x>
+      <y>574</y>
+      <w>161</w>
+      <h>245</h>
+    </coordinates>
+    <panel_attributes>ControlSystem_workCondition()
+
+
+
+
+
+
+
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;330.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1260</x>
+      <y>574</y>
+      <w>161</w>
+      <h>245</h>
+    </coordinates>
+    <panel_attributes>ControlSystem_workCondition()
+
+
+
+
+
+
+
+lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;330.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>294</x>
+      <y>385</y>
+      <w>1134</w>
+      <h>833</h>
+    </coordinates>
+    <panel_attributes>StateMain
+--
+entry - Rs422_ctor(), BlockExch_ctor(); ActivityManagerConnect_ctor(), ActivityManager_ctor(), RelayCtrl_ctor(), ControlSystem_ctor(), 
+PositionDet_ctor(), ShuntShift_ctor(), IntegrCtrl_ctor(), IntegrCtrlGen_ctor().
+run - RS422_run(), BlockExch_run(). ActiveManagerConnect_run(), ActivityManager_run(), ControlSystem_run(), PositionDet_run(), ShuntShift_run(), IntegrCtrl_run(), IntegrCtrlGen_run().
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>672</x>
+      <y>203</y>
+      <w>378</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>
+
+Statelnitial
+--
+entry/Indication_on()
+do/Binln_isTechJumperSet(). Calibration_startCondition(). DeviceAddress_isValid()
+exit/Indication_off()
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLSpecialState</id>
+    <coordinates>
+      <x>847</x>
+      <y>77</y>
+      <w>28</w>
+      <h>28</h>
+    </coordinates>
+    <panel_attributes>type=initial</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>854</x>
+      <y>98</y>
+      <w>21</w>
+      <h>42</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;40.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>224</x>
+      <y>126</y>
+      <w>1288</w>
+      <h>1106</h>
+    </coordinates>
+    <panel_attributes>StateTop
+--
+do/ControlMK(), InterChannel_run(), AnalogMeasurement_run(), Eeprom_run(), Binln_run(), DeviceAddress_run(), Indicatoin_run(&amp;ledRs1), Indicatoin_run(&amp;ledRs2), Indicatoin_run(&amp;ledPlusPos),  Indicatoin_run(&amp;ledMinusPos), Indicatoin_run(&amp;ledLossPos), OverloadDet_run(), OverloadDetectorDelay_run(), Indicatoin_run(), DeviceAddress_run(), CheckSupply_run(), RelayCtrl_run(), CheckSupply_run(), OverloadDet_run()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>315</x>
+      <y>791</y>
+      <w>322</w>
+      <h>161</h>
+    </coordinates>
+    <panel_attributes>
+
+StatePassive
+
+--
+do/ActivityManager_isActive(), ControlSystem_workConidition()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>840</x>
+      <y>805</y>
+      <w>581</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>
+
+StateActive
+
+--
+do/ActivityManager_isActive(), ControlSystem_workConidition()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>

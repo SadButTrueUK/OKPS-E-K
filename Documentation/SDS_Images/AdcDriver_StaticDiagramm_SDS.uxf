@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <zoom_level>9</zoom_level>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>414</x>
+      <y>63</y>
+      <w>396</w>
+      <h>216</h>
+    </coordinates>
+    <panel_attributes>AdcDriver_PIC33- драйвер АЦП
+
+--
+
+AdcDriver_ctor
+AdcDriver_get
+AdcDriver_start
+AdcDriver_interruptAdc1
+AdcDriver_isReady
+
+valign=center</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>459</x>
+      <y>387</y>
+      <w>324</w>
+      <h>162</h>
+    </coordinates>
+    <panel_attributes>AdcDriver_geyCanal - канал измерений АЦП
+
+--
+number - номер канала АЦП
+valign=center</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>459</x>
+      <y>648</y>
+      <w>315</w>
+      <h>117</h>
+    </coordinates>
+    <panel_attributes>
+Adc_Inic1.h - Макроопределения 
+для AdcDriver_PIC33
+
+--
+
+
+--
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>603</x>
+      <y>270</y>
+      <w>27</w>
+      <h>135</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;130.0;10.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>603</x>
+      <y>540</y>
+      <w>27</w>
+      <h>126</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;&gt;&gt;&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;120.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>

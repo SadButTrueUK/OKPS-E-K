@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <help_text/>
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>190</x>
+      <y>110</y>
+      <w>230</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>AnalogMeasurement
+--
+Формирование синхр. значений:
+- напряжениий R1, R2, Uкг;
+- напряжений Uu, Uv, Uw;
+- токов Iu, Iv, Iw.
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>410</x>
+      <y>140</y>
+      <w>90</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;70.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>480</x>
+      <y>110</y>
+      <w>270</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>AnalogInput
+--
+- чтение данных из буфера АЦП;
+- обработка данных в измерительных каналах.
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>740</x>
+      <y>140</y>
+      <w>80</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;60.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>800</x>
+      <y>110</y>
+      <w>240</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>Adc
+--
+- настройка АЦП;
+- чтение данных из буфера АЦП;
+- управление АЦП.
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>480</x>
+      <y>290</y>
+      <w>270</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>DigitalFilter
+--
+- управление цифровыми фильтрами;
+- вызов функции цифровой фильтрации.
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>480</x>
+      <y>440</y>
+      <w>270</w>
+      <h>70</h>
+    </coordinates>
+    <panel_attributes>dsPIC33_FIR_filter
+--
+- реализация КИХ фильтра
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>610</x>
+      <y>370</y>
+      <w>30</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;70.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>610</x>
+      <y>230</y>
+      <w>30</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;60.0</additional_attributes>
+  </element>
+</diagram>

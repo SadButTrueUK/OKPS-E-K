@@ -1,0 +1,11 @@
+{signal: [
+  {name: 'PS1-S', wave: 'xxhppppp|..lp|........'},
+  {name: 'PS1-M', wave: 'xxlnnnnn|....|....hpp.'},
+  {name: 'KPS1', phase: -0.2,  wave: 'xxhppppp|..hn|....hppp'},
+ ],
+head: {text:
+  ['tspan',
+    ['tspan', 'Включение       |      Нормальная работа              |    Тест нижнего ключа VT13   |         Тест верхнего ключа VT12         |                 '],
+
+  ]
+}  }

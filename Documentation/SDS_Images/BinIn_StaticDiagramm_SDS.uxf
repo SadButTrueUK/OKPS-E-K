@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <help_text/>
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>520</x>
+      <y>510</y>
+      <w>220</w>
+      <h>130</h>
+    </coordinates>
+    <panel_attributes>deviceAddress - определение адреса прибора
+--
+- адрес прибора;
+- значение CRC;
+- значение конфигурационных перемычек;
+--
+style=wordwrap
+bg=light_gray
+fg=black
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>290</x>
+      <y>220</y>
+      <w>310</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>BinIn - главный модуль компонента
+--
+- управление положением РПВ;
+- контроль положения РПВ;
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>440</x>
+      <y>290</y>
+      <w>100</w>
+      <h>440</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;420.0;80.0;420.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>520</x>
+      <y>390</y>
+      <w>220</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>ActivityManager - управление активностью прибора
+--
+- положение РПВ;
+--
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>440</x>
+      <y>430</y>
+      <w>100</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;80.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>590</x>
+      <y>250</y>
+      <w>90</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;70.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>660</x>
+      <y>220</y>
+      <w>230</w>
+      <h>80</h>
+    </coordinates>
+    <panel_attributes>BinInDecoder - декодер данных "4 из 6"
+--
+- декодирование данных;
+--
+
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>520</x>
+      <y>660</y>
+      <w>220</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>CheckSupply - контроль источников питания
+--
+- состояние питания 24 В;
+- состояние питания 220 В;
+--
+style=wordwrap
+bg=light_gray
+fg=black</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>440</x>
+      <y>570</y>
+      <w>100</w>
+      <h>30</h>
+    </coordinates>
+    <panel_attributes>lt=-&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;80.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>260</x>
+      <y>170</y>
+      <w>660</w>
+      <h>200</h>
+    </coordinates>
+    <panel_attributes>halign=center
+Компонент BinIn
+
+lt=.
+
+
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+</diagram>
