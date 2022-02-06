@@ -258,7 +258,7 @@ m1=Данные
     </coordinates>
     <panel_attributes>lw=2
 Управление
-ShuntShiftGen</panel_attributes>
+shuntShiftGen</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
@@ -297,7 +297,7 @@ m1=Управление формированием
     </coordinates>
     <panel_attributes>lw=2
 Управление
-PositionDetGen</panel_attributes>
+posDetGenerator</panel_attributes>
     <additional_attributes/>
   </element>
   <element>

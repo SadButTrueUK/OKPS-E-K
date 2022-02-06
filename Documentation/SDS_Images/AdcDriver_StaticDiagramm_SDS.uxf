@@ -30,7 +30,7 @@ valign=center</panel_attributes>
       <w>324</w>
       <h>162</h>
     </coordinates>
-    <panel_attributes>AdcDriver_geyCanal - канал измерений АЦП
+    <panel_attributes>AdcDriver_getCanal - канал измерений АЦП
 
 --
 number - номер канала АЦП

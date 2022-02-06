@@ -10,7 +10,7 @@
       <w>220</w>
       <h>130</h>
     </coordinates>
-    <panel_attributes>deviceAddress - определение адреса прибора
+    <panel_attributes>DeviceAddress - определение адреса прибора
 --
 - адрес прибора;
 - значение CRC;
