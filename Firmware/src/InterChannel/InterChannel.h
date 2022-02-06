@@ -1,6 +1,7 @@
 /**
 * \file    InterChannel.h
-* \brief   Межканальный обмен. Интерфейс. 
+* \brief   Межканальный обмен
+* \details Интерфейс
 * \details Модуль межканального обмена предназначен для обеспечения синхронизации 
 * и передачи данных между своим и соседним каналами.
 *
@@ -12,15 +13,15 @@
 //*****************************************************************************
 // Команды препроцессора для предотвращения повторного включения содержимого файла
 //*****************************************************************************
-#ifndef INTERCHANNEL_H
-#define INTERCHANNEL_H
+#ifndef interchannel_h
+#define interchannel_h
 
 //*****************************************************************************
 // Подключаемые файлы
 //*****************************************************************************
 #include <stdint.h>
 #include <stdbool.h>
-#include "iodrv.h"
+#include "drv\iodrv.h"
 #include "ProtectionState_codes.h"
 #include "interChannelId.h"
 
@@ -37,8 +38,7 @@ typedef InterChannelId id_t ;      ///< Тип идентификатора параметра.
 /// \details Перечень действий, которые МКО выполняет 
 /// над параметрами.
 ///
-typedef enum 
-{
+typedef enum {
       
     /// \brief сценарий не определен 
     /// \note Такое значение приведет к отказу при синхронизации.
@@ -58,15 +58,14 @@ typedef enum
     ///
     eScriptDebug,            
     
-    eScriptChVal,            ///< процедура синхронизации по изменению значения
+    eScriptChVal,            ///< синхронизация по изменению значения
     eScriptCount             ///< количество сценариев синхронизации
 } InterChannelScript ;
 
 //*****************************************************************************
 /// \brief Процедуры синхронизации данных.
 ///
-typedef enum 
-{
+typedef enum {
         
       eProcSyncNil = 0,           ///< не выполняется никаких действий с параметром
         
@@ -86,8 +85,7 @@ typedef enum
 //*****************************************************************************
 /// \brief Процедуры контроля данных.
 ///
-typedef enum 
-{
+typedef enum {
       eProcCheckNil = 0,          ///< не выполняется никаких действий с параметром
       eProcCheckOff,              ///< нет контроля (применяется при регулировке аппаратуры или передаче параметра)
       eProcCheckEqual,            ///< процедура контроля данных (абсолютное совпадение данных)
@@ -109,7 +107,7 @@ typedef enum
 /// \note Вызов этой функции перед использованием других функций этого 
 /// компонента обязателен.
 ///
-void InterChannel_ctor( const ArrayIoDriver * drvPtr );
+void InterChannel_ctor( const ArrayIoDriver *drvPtr );
 
 //*****************************************************************************
 /// \brief Настройка сценариев синхронизации параметра.
@@ -292,7 +290,7 @@ void InterChannel_runDrv( void );
 //*****************************************************************************
 
 //*****************************************************************************
-/// \brief Идентификаторы позиции данных в физическом протоколе \a CAN.
+/// \brief Идентификаторы позиции данных в физическом протоколе CAN.
 /// \note В протоколе передается два параметра. Данные идентификаторы используются 
 /// функциями #InterChannel_getCommunicationData и 
 /// #InterChannel_setCommunicationData 
@@ -375,10 +373,10 @@ void InterChannel_getCommunicationData( uint8_t  *buf, int size, int commPos, id
 *    2) Заменено определение типа id_t с uint8_t InterChannelId, который определяет 
 * идентификаторы параметров в файле InterChannelId.h.
 *    3) Из-за изменений в структуре драйверов ArrayIoDriver изменен прототип функции 
-*    InterChannel_runCommunication( const ArrayIoDriver * drv ) на InterChannel_runCommunication( ),
+*    InterChannel_runCommunication( const ArrayIoDriver *drv ) на InterChannel_runCommunication( ),
 *    поскольку теперь таблица функций и данные объединены в одной структуре.
-*    Тек же изменен прототип функции void InterChannel_ctor( const void * drvPtr ) на 
-*    void InterChannel_ctor( const ArrayIoDriver * drvPtr ).
+*    Тек же изменен прототип функции void InterChannel_ctor( const void *drvPtr ) на 
+*    void InterChannel_ctor( const ArrayIoDriver *drvPtr ).
 *
 * Версия 1.0.5
 * Дата   08-07-2019
@@ -391,7 +389,7 @@ void InterChannel_getCommunicationData( uint8_t  *buf, int size, int commPos, id
 * 
 * Версия 1.0.6
 * Дата   13-09-2019
-* Автор  Годунок А.Н. 
+* Автор  Годунок А.Н.
 *
 * Проблема: 
 *    1) При выполнении сценария eScriptTransmit принимающая сторона не могла

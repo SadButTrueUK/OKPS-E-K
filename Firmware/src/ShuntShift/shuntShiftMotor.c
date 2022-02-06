@@ -2,8 +2,8 @@
 * \file    shuntShiftMotor.c
 * \brief   \copybrief shuntShiftMotor.h
 *
-* \version 1.0.1
-* \date    24-01-2018
+* \version 1.0.3
+* \date    18-02-2021
 * \author  Кругликов В.П.
 */
 
@@ -14,10 +14,14 @@
 #include "shuntShiftGen.h"
 #include "ProtectionState_codes.h"
 #include "asserts.h"
-#include "AnalogMeasurement.h"
 #include "string.h"
 #include "asserts_ex.h"
 #include "InterChannel.h"
+#include "ControlSystem.h"
+#include "BinIn.h"
+#include "shuntShift.h"
+
+#include "DebugTools.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -49,6 +53,12 @@
 #define THR_OVL_SC_ADC      ( THR_OVL_SC * 1000 / K_RATIO_CURRENT )     ///< Значение тока перегрузки в дискретах АЦП.
 
 //*****************************************************************************
+/// \brief Таймаут вызовов функции вычисления среднего тока при переводе или при работе на фрикцию 
+#define TIMEOUT_FOR_FUNC_CALC_MIDDLE_VAL   10 
+
+#define TIMEOUT_FOR_AVERAGE_IN_WINDOW 900
+
+//*****************************************************************************
 /// \brief Таймаут, по истечении которого обрабатывается сигнал обратной связи фаз.
 ///
 #define TIMEOUT_MEASURE_U_FB   150
@@ -63,13 +73,11 @@
 ///
 #define NUM_OVL_SC      800                          
 
-//*****************************************************************************
-// Локальные типизированные константы
-//***************************************************************************** 
-static const uint8_t NUM_OF_PHASES = 3;    ///< Количество фаз сигнала.
+#define  NUM_OF_PHASES  3    ///< Количество фаз сигнала.
+
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -90,14 +98,28 @@ typedef struct
 {
     uint16_t cntOvlCur;            ///< Счетчик количества токовых перегрузок.
     uint16_t timeoutOvlCur;        ///< Таймаут при определении токовой перегрузки.
+    bool isOvlCurr;                ///< Бит перегрузки по току
 }strOvlCurrTag;
+
+//*****************************************************************************
+/// \brief Структура для работы с кольцевым буфером для получения
+/// скользящего среднего этого буфера 
+///
+typedef struct CircularBuffer_tag 
+{
+    uint16_t  buff[MIDDLE_VAL_WINDOW_SIZE]; //буфер отсчётов        
+    uint8_t   index;                         //индекс текущего отсчёта
+    uint16_t  averageVal;                   //конечное усреднённое значение
+    uint8_t  sizeBuf;
+    uint8_t  shifts;
+} CircularBuffer;
 
 //*****************************************************************************
 /// \brief Идентификаторы значений автомата состояний функции #ShuntShiftMotor_run.
 ///
 typedef enum
 {
-    eStop          = 0,    ///< выключенное состояние
+    eStartState          = 0,    ///< выключенное состояние
     eAcceleration,         ///< разгон
     eRunning,              ///< движение
     eShutdown,             ///< отключение
@@ -105,7 +127,7 @@ typedef enum
 } ShiftMotorStates;
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************
@@ -159,14 +181,28 @@ const uint8_t shutdownLevel[SHUTDOWN_STAGE_NUM] =
 };
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 static ShiftMotor_flags flags;              ///< Флаги состояния.
 static MotorType        type;               ///< Тип двигателя.
 static MotorFailure     failure;            ///< Неисправность двигателя.
-static ShiftMotorStates stateCnt;           ///< Счетчик состояния.
+static ShiftMotorStates stateCntMotor;           ///< Счетчик состояния.
 static uint16_t         workTime;           ///< Время работы.
 static strOvlCurrTag    strOvlCurr;         ///< Структура контроля напряжений обратной связи по фазным напряжениям.
+static uint16_t         timeoutBreakPh;     ///< Счетчик времени накопления состояния обрыва фаз
+static CircularBuffer circularBuffer[NUM_OF_PHASES]; ///< Массив структур для вычисения средних значений фазных токов в выбранном временном окне 
+uint16_t timeoutForAverageInWindow; 
+
+
+//*****************************************************************************
+// Прототипы локальных функций
+//*****************************************************************************
+
+/// \brief  Функция для определения типа обрыва фаз
+/// \param state - тип обрыва (1 фаза либо 2(3));
+static void checkBreakPhase( MotorFailure state );
+
+static void calcMiddleValueInWindow( const uint16_t data, CircularBuffer* structOfData, const uint8_t t_o_value );
 
 //*****************************************************************************
 // Реализация интерфейсных функций
@@ -181,7 +217,7 @@ void ShuntShiftMotor_ctor( MotorType motor )
     type = motor;
     failure = eNorm;
     workTime = 0;
-    stateCnt = eStop;
+    stateCntMotor = eStartState;
     flags.ctrl = 0;      // Модуль выключен
     
     InterChannel_setParamSettings( eICId_ShuntShiftMotor_failure,
@@ -190,6 +226,27 @@ void ShuntShiftMotor_ctor( MotorType motor )
                                    eProcCheckOff, 0, 0,
                                    50, 0, 0 );
     memset( &strOvlCurr, 0, sizeof( strOvlCurr ) );
+    
+    for( uint8_t i = 0; i < NUM_OF_PHASES; i++ ) //инициализация структур для вычисления среднего значения токов фаз
+    {
+        memset( &circularBuffer[i].buff, 0, sizeof( circularBuffer[i].buff ) );
+        memset( &circularBuffer[i].index, 0, sizeof( circularBuffer[i].index ) );
+        memset( &circularBuffer[i].sizeBuf, MIDDLE_VAL_WINDOW_SIZE, sizeof( circularBuffer[i].sizeBuf ) );
+        memset( &circularBuffer[i].shifts, 7, sizeof( circularBuffer[i].shifts ) );
+    }
+}
+
+//Функция для определения типа обрыва фаз
+static void checkBreakPhase( MotorFailure state )
+{
+    static const uint16_t BREAK_THR_TIME = 250; //порог времени для определения обрыва
+    
+    if( timeoutBreakPh++ == BREAK_THR_TIME )
+    {
+        timeoutBreakPh = 0;
+        failure = state;
+        memset( &strOvlCurr, 0, sizeof( strOvlCurr ) );
+    }
 }
 
 //*****************************************************************************
@@ -197,32 +254,41 @@ void ShuntShiftMotor_ctor( MotorType motor )
 void ShuntShiftMotor_run( void )
 {
    
-    static uint16_t timeoutCnt;            //Счетчики времени
-    static uint8_t accelCnt;               //Счетчик разгона и торможения
-    uint16_t current[3];                   //Значения токов и напряжений обратной связи 3-фазного генератора
-        
-    ShuntShiftGen_run( );                  // Работа генератора 
+    static uint16_t timeoutCnt, timeoutBreakPh /*, timeoutForAverageInWindow*/; //Счетчики времени
+    static uint8_t accelCnt;                    //Счетчик разгона и торможения
+    uint16_t current[3];                        //Значения токов и напряжений обратной связи 3-фазного генератора
     
-    if( stateCnt != eStop )  
+    ShuntShiftGen_run( );                  // Работа генератора 
+    //Время перевода считаем пока мотор не остановлен либо когда пропало 220В во время перевода стрелки
+    if( stateCntMotor != eStartState || ControlSystem_getStateCheck220V( ) == eCount )    
         workTime++;    //Инкремент времени перевода
-        
-    switch( stateCnt )
+    if( timeoutForAverageInWindow > 0 )
+        timeoutForAverageInWindow--;
+    
+    switch( stateCntMotor )
     {
-        case eStop:    //Выключенное состояние
+        case eStartState:    //Выключенное состояние
             if( flags.ctrl )
             {   //Включение
                 accelCnt = 0;
                 ShuntShiftGen_turnOn( flags.dir, accelFreq[accelCnt], accelLevel[accelCnt] );
                 timeoutCnt = accelTime[accelCnt];
+                timeoutForAverageInWindow = TIMEOUT_FOR_AVERAGE_IN_WINDOW;
                 workTime = 0;                 
-                stateCnt = eAcceleration;
                 failure = eNorm;
                 memset( &strOvlCurr, 0, sizeof( strOvlCurr ) );
+                for( uint8_t i = 0; i < NUM_OF_PHASES; i++ ) //инициализация структур для вычисления среднего значения токов фаз
+                {
+                    memset( &circularBuffer[i].buff, 0, sizeof( circularBuffer[i].buff ) );
+                    memset( &circularBuffer[i].index, 0, sizeof( circularBuffer[i].index ) );
+                    circularBuffer[i].averageVal = 0;
+                }
+                stateCntMotor = eAcceleration;
             }
             break;
-     
         case eAcceleration:                   //Разгон
-            if( timeoutCnt ) timeoutCnt--;    //Декремент таймаута разгона
+            if( timeoutCnt ) 
+                timeoutCnt--;    //Декремент тайм-аута разгона
             else
             {
                 accelCnt++;    //Следующая ступень разгона
@@ -235,11 +301,11 @@ void ShuntShiftMotor_run( void )
                 else
                 {   // Разгон завершился
                     ShuntShiftGen_setParam( eFreq50hz, generLevel[type] );
-                    stateCnt = eRunning;    
                     timeoutCnt = TIMEOUT_MEASURE_U_FB;
                     failure = eNorm; 
                     if( !InterChannel_isHandling( eICId_ShuntShiftMotor_failure ) )    
                         InterChannel_synchronize( eICId_ShuntShiftMotor_failure, failure );
+                    stateCntMotor = eRunning; 
                 }
             }
             break;
@@ -247,43 +313,51 @@ void ShuntShiftMotor_run( void )
         case eRunning:    //Движение
             if( flags.ctrl )
             {   //Включено
-                uint8_t cntBr = 0;
-                                
-                //Определение обрыва обмотки, контроль корректора коэффициента мощности
-                for( uint8_t i = 0; i < NUM_OF_PHASES; i++ )
-                {
-                    current[i] = AnalogMeasurement_getData( eAinchIV + i )->rms; 
-                    if( current[i] < ( flags.stand ? STAND_BREAK_CURRENT : MOTOR_BREAK_CURRENT ) )
+                    uint8_t cntBr = 0;
+
+                    //Определение обрыва обмотки, контроль корректора коэффициента мощности
+                    for( uint8_t i = 0; i < NUM_OF_PHASES; i++ )
                     {
-                        cntBr++;
-                    }
-                    else if( current[i] > THR_OVL_SC_ADC ) //значение тока фазы выше тока перегрузки
-                    {
-                        strOvlCurr.cntOvlCur++; 
-                    }    
-                }
-                switch( cntBr )
-                {
-                    case 0:
-                        if( ++strOvlCurr.timeoutOvlCur == TIMEOUT_OVL_SC ) //истёк таймаут определения тока перегрузки
+                        if( timeoutForAverageInWindow == 0 ) //считаем среднее в кольцевом буфере через 900 мс после начала перевода
                         {
-                            strOvlCurr.timeoutOvlCur = 0;
-                            failure = ( strOvlCurr.cntOvlCur > NUM_OVL_SC ) ? eOverloadCircuit : eNorm;
-                            strOvlCurr.cntOvlCur = 0;
+                            calcMiddleValueInWindow( InterChannel_getData( eICId_IV_rms + i ), 
+                            &circularBuffer[i], TIMEOUT_FOR_FUNC_CALC_MIDDLE_VAL );
                         }
-                        break; 
-                    case 1:
-                        failure = eBreakOnePhase;
-                        memset( &strOvlCurr, 0, sizeof(strOvlCurr) );
-                        break;
-                    case 2:
-                    case 3:
-                        failure = eBreakAllPhases;
-                        memset( &strOvlCurr, 0, sizeof(strOvlCurr) );
-                        break;
-                    default: 
-                        ERROR_ID( eGrPS_ShuntShift, ePS_ShiftMotorCnt2Err );
-                }
+                        current[i] = AnalogMeasurement_getData( eAinchIV + i )->rms; 
+                        if( current[i] < ( flags.stand ? STAND_BREAK_CURRENT : MOTOR_BREAK_CURRENT ) && BinIn_is220vOk( ) )
+                        {
+                            cntBr++;
+                        }
+                        else if( current[i] > THR_OVL_SC_ADC ) //значение тока фазы выше тока перегрузки
+                        {
+                            strOvlCurr.cntOvlCur++; 
+                        }    
+                    }
+                    switch( cntBr )
+                    {
+                        case 0:
+                            if( ++strOvlCurr.timeoutOvlCur == TIMEOUT_OVL_SC ) //истёк тайм-аут определения тока перегрузки
+                            {
+                                strOvlCurr.timeoutOvlCur = 0;
+                                if ( strOvlCurr.cntOvlCur > NUM_OVL_SC )
+                                {
+                                    strOvlCurr.isOvlCurr = true;
+                                    failure = eOverloadCircuit;
+                                }
+                                    strOvlCurr.cntOvlCur = 0;
+                            }
+                            timeoutBreakPh = 0;
+                            break; 
+                        case 1:
+                            checkBreakPhase( eBreakOnePhase );
+                            break;
+                        case 2:
+                        case 3:
+                            checkBreakPhase( eBreakAllPhases );
+                            break;
+                        default: 
+                            ERROR_ID( eGrPS_ShuntShift, ePS_ShiftMotorCnt2Err );
+                    }
             }
             else
             { //Переход к отключению двигателя
@@ -295,14 +369,15 @@ void ShuntShiftMotor_run( void )
                 }
                 ShuntShiftGen_setParam( eFreq50hz, shutdownLevel[accelCnt] );
                 timeoutCnt = SHUTDOWN_STAGE_TIME;
-                stateCnt = eShutdown;
+                stateCntMotor = eShutdown;
                 if( !InterChannel_isHandling( eICId_ShuntShiftMotor_failure ) )    
                     InterChannel_synchronize( eICId_ShuntShiftMotor_failure, failure );
             }
             break;
  
         case eShutdown:    //Отключение 
-            if( timeoutCnt ) timeoutCnt--;   //Декремент таймаута
+            if( timeoutCnt ) 
+                timeoutCnt--;   //Декремент тайм-аута
             else
             {
                 accelCnt++;
@@ -314,7 +389,7 @@ void ShuntShiftMotor_run( void )
                 else
                 {   // Отключение завершено
                     ShuntShiftGen_turnOff( );
-                    stateCnt = eFullShutdown;
+                    stateCntMotor = eFullShutdown;
                 }
             }
             break;
@@ -322,7 +397,7 @@ void ShuntShiftMotor_run( void )
         case eFullShutdown:    //Полное отключение (отключение генератора)
             if( !ShuntShiftGen_isOn( ) )
             {
-                stateCnt = eStop;
+                stateCntMotor = eStartState;
             }
             break;
 
@@ -354,7 +429,7 @@ void ShuntShiftMotor_turnOff( void )
 // Проверка состояния модуля
 bool ShuntShiftMotor_isOn( void )
 {
-    return stateCnt != eStop;
+    return stateCntMotor != eStartState;
 }
 
 //*****************************************************************************
@@ -378,6 +453,55 @@ uint16_t ShuntShiftMotor_getWorkingTime( void )
 }
 
 //*****************************************************************************
+// Получить состояние перегрузки по току
+bool ShuntShiftMotor_getIsOvlCurr( void )
+{
+    return strOvlCurr.isOvlCurr;
+}
+
+//*****************************************************************************
+// Установить состояние перегрузки по току
+void ShuntShiftMotor_setIsOvlCurr( bool val )
+{
+    strOvlCurr.isOvlCurr = val;
+}
+
+//*****************************************************************************
+// Возвращает среднее значение тока фаз управления двигателя
+uint16_t ShuntShiftMotor_getAverageThreePhasesCurrent( void )
+{
+    return __builtin_divud( circularBuffer[0].averageVal + circularBuffer[1].averageVal +
+                            circularBuffer[2].averageVal, 3);
+}
+//*****************************************************************************
+// Работа с кольцевым буфером для вычисления скользящего среднего.
+// Входные параметры :
+// data  – данные АЦП для помещения в буфер.
+// structOfData - указатель на структуру кольцевого буфера
+// t_o_value  - значение таймаута для работы функции
+static void calcMiddleValueInWindow( const uint16_t data, CircularBuffer* structOfData, const uint8_t t_o_value )
+{ 
+    //return;
+    
+    uint32_t sumBuff = 0;
+    static uint8_t timeout;
+    
+    if( ++timeout < t_o_value ) //Функция вызывается в единицу времени t_o_value (в миллисекундах)
+        return; 
+    timeout = 0;
+    
+    if( structOfData->index == structOfData->sizeBuf )
+        structOfData->index = 0;
+    structOfData->buff[structOfData->index++] = data; 
+    for( uint8_t i = 0; i < structOfData->sizeBuf; i++ )
+    {
+        sumBuff += structOfData->buff[i]; 
+    }
+    structOfData->averageVal = sumBuff >> structOfData->shifts;
+}
+
+
+//*****************************************************************************
 /**
 * История изменений: 
 * 
@@ -387,4 +511,19 @@ uint16_t ShuntShiftMotor_getWorkingTime( void )
 * 
 * Изменения:
 *    Базовая версия.
+* 
+* Версия 1.0.2
+* Дата   15-10-2020
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   - изменена логика формирования признака перегрузки по току во время перевода стрелки в ShuntShiftMotor_run;
+*   - добавлены реализации интерфейсов ShuntShiftMotor_getIsOvlCurr и ShuntShiftMotor_setIsOvlCurr. 
+*
+* Версия 1.0.3
+* Дата   18-02-2021
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   Добавлена функция обработки состояния обрыва фаз(фазы) checkBreakPhase 
 */

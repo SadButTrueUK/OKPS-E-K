@@ -3,8 +3,8 @@
 * \brief   Модуль логики контроля целостности обмоток двигателя
 * \details Интерфейс
 *
-* \version 1.0.1
-* \date    05-02-2018
+* \version 1.0.2
+* \date    13-07-2021
 * \author  Кругликов В.П.
 */
 
@@ -21,6 +21,11 @@
 #include <stdbool.h>
 #include "shuntShiftMotor.h"
 #include "positionDet.h"
+
+
+#define NUM_PHASES  3  ///< Количество фаз сигнала.
+
+extern uint8_t statePhaseForAlarm[NUM_PHASES];
 
 //*****************************************************************************
 // Прототипы интерфейсных функций
@@ -71,4 +76,11 @@ MotorFailure IntegrCtrl_getFailure( void );
 *
 * Изменения:
 *    Базовая редакция.
+*
+* Версия 1.0.2
+* Дата   13-07-2021
+* Автор  Кругликов В.П.
+*
+* Изменения: 
+* Перенесена константа NUM_PHASES, объявлен глобальный массив statePhaseForAlarm
 */

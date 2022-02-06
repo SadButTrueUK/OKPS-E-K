@@ -2,8 +2,8 @@
 * \file    IntegrCtrl.c
 * \brief   \copybrief IntegrCtrl.h
 *
-* \version 1.0.1
-* \date    05-02-2018
+* \version 1.0.6
+* \date    13-07-2021
 * \author  Кругликов В.П.
 */
 
@@ -19,6 +19,10 @@
 #include "Main.h"
 #include "Tracing.h"
 #include "OverloadDet.h"
+#include <string.h>
+#include "CheckCallFunctions.h"
+#include "shuntShiftMotor.h"
+
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -32,7 +36,7 @@
 // 4. 1 дискрета АЦП = 2.826 мА
 // 5. Динамический диапазон измерения тока (средневыпрямленное значение)  Iav = (Uref - Udc)/0.2592/sqrt(2) = 4.092 А
 
-#define NUM_PHASES                 3            ///< Количество фаз сигнала.
+
 #define TIME_PAUSE_PHASE_TO_PHASE  400U         ///< Пауза в мс между выдачей напряжения в соседних фазах сигнала.
 
 //*****************************************************************************
@@ -41,17 +45,17 @@
 #define PAUSE_BEFORE_NEXT_CHECK    400U
 
 //*****************************************************************************
-#define START_TIMEOUT              5000U        ///< Начальный таймаут а также пауза после снятия КЗ.
+#define START_TIMEOUT              5000U        ///< Начальный тайм-аут а также пауза после снятия КЗ.
 
 //*****************************************************************************
 /// \brief Значение уровня напряжения, по скорости нарастания которого принимается решение о наличии КЗ (для двигателя)
 ///
-#define LEVEL_THR_SC_MOTOR               26U 
+#define LEVEL_THR_SC_MOTOR         26U 
 
 //*****************************************************************************
 /// \brief Значение уровня напряжения, по скорости нарастания которого принимается решение о наличии КЗ (для эквивалента стрелки)
 ///
-#define LEVEL_THR_SC_STAND               30U
+#define LEVEL_THR_SC_STAND         30U
 
 //*****************************************************************************
 /// \brief Значение тока в мА*10, которое считается номинальным для номинальной нагрузки.
@@ -64,7 +68,7 @@
 //*****************************************************************************
 /// \brief Коэффициент преобразования мА в единицы АЦП (умножен на 10) 1 дискрета - 2.826 мА.
 ///
-#define  CURR_RATIO          29U         
+#define  CURR_RATIO                29U         
 
 //*****************************************************************************
 /// \brief Значение номинального рабочего тока в дискретах АЦП.
@@ -84,7 +88,7 @@
 //*****************************************************************************
 /// \brief Максимальный уровень сигнала, по которому определяется обрыв.
 ///
-#define MAX_LEVEL              ( 14U * MULTIPLY_VOLTAGE_STEP_INT_CTRL )
+#define MAX_LEVEL              ( 18U * MULTIPLY_VOLTAGE_STEP_INT_CTRL )
 
 //*****************************************************************************
 #define MIN_LEVEL_INT_CTRL       0               ///< Минимальный уровень сигнала.
@@ -150,26 +154,25 @@
 //*****************************************************************************
 /// \brief Количество чередований фаз при 2-х проходах 3-х фаз (АВС, АСВ). 
 ///
-#define NUM_OF_INTERLEAVING    2
+#define NUM_OF_INTERLEAVING    2U
 
 
 //*****************************************************************************
 /// \brief Уровень напряжения двух фаз (RMS), принятого за опасное при тестировании третьей фазы 
 ///
-#define THR_OF_UNSAFE_VOLTAGE_RMS    20
+#define THR_OF_UNSAFE_VOLTAGE_RMS    90
 
 
 //*****************************************************************************
 /// \brief Уровень напряжения двух фаз (мгновенное), принятого за опасное при тестировании третьей фазы 
 ///
-#define THR_OF_UNSAFE_VOLTAGE_VAL    50
-
-
+#define THR_OF_UNSAFE_VOLTAGE_VAL    90
 
 //*****************************************************************************
-/// \brief Количество фаз, превішение напряжения на которыъ приводит к опасному отказу 
+/// \brief Количество контролируемых фаз, превышение напряжения на которых приводит к опасному отказу 
 ///
 #define NUM_UNSAFE_PHASE_VOLTAGES     2
+
 
 //*****************************************************************************
 // Определение типов данных
@@ -182,14 +185,14 @@ typedef enum
 {
     eSwitchedOff,                     ///< выключен
     
-    /// \brief начальный таймаут либо таймаут после появления нештатной ситуации (КЗ или обрыв)
+    /// \brief начальный тайм-аут либо тайм-аут после появления нештатной ситуации (КЗ или обрыв)
     ///
     eStartTimeout,
     eIncLevel,                        ///< увеличение значения уровня до перехода к следующему состоянию автомата
     eDecLevel,                        ///< уменьшение значения до минимума
     ePauseToOtherPhase,               ///< пауза при переходе к другой фазе
     eWaitingForPeriod,                ///< ожидание повтора по истечении периода проверки
-    eSetPauseToOtherPhase,            ///< таймаут перед переходом к тестированию следующей фазы
+    eSetPauseToOtherPhase,            ///< тайм-аут перед переходом к тестированию следующей фазы
     
     /// \brief вычисление значения напряжения обратной связи при тестировании корректора коэффициента мощности
     ///
@@ -248,12 +251,25 @@ const uint8_t maskSeqPh[NUM_OF_INTERLEAVING][NUM_PHASES] =
 //*****************************************************************************
 /// \brief Индексы двух фаз, на которых будет проверяться наличие напряжения при тестировании третьей фазы
 ///
-const uint8_t otherPhaseIndex[NUM_PHASES][NUM_UNSAFE_PHASE_VOLTAGES] =
+const uint8_t otherPhIndex[NUM_PHASES][NUM_UNSAFE_PHASE_VOLTAGES] =
 {
     { eAinchUW, eAinchUU },
     { eAinchUV, eAinchUU },
     { eAinchUV, eAinchUW }
 };
+
+//*****************************************************************************
+/// \brief Индексы структур кольцевых буферов для двух фаз, на которых будет проверяться наличие 
+/// напряжения при тестировании третьей фазы
+///
+const uint8_t maskOtherPhForStruct[NUM_PHASES][NUM_UNSAFE_PHASE_VOLTAGES] =
+{
+    {ePhaseU, ePhaseW},
+    {ePhaseV, ePhaseW},
+    {ePhaseV, ePhaseU}
+};
+
+uint8_t statePhaseForAlarm[NUM_PHASES];
 
 //*****************************************************************************
 // Определение локальных переменных
@@ -281,6 +297,11 @@ static MotorFailure failure = eNorm;
 static uint8_t  sumBreak;               ///< Счётчик обрывов фаз.
 static uint8_t  sumShortCircuit;        ///< Счётчик КЗ фаз.
 static bool     dir;                    ///< Для установки чередования фаз по принципу АВС, АСВ.
+static bool     isSynchronizeScAndBreak = false;
+//*****************************************************************************
+/// \brief Массив структур для работы с кольцевыми буферами из отсчётов АЦП
+///
+//static AnalogMeasurementAverage analogMeasAverage[NUM_PHASES];  
 
 //*****************************************************************************
 // Реализация интерфейсных функций
@@ -290,6 +311,9 @@ static bool     dir;                    ///< Для установки чередования фаз по пр
 // Инициализация модуля контроля целостности обмоток
 void IntegrCtrl_ctor( void )
 {
+//    static const uint8_t SIZE_BUF_ADC_AVERAGE = 32;
+//    static const uint8_t NUM_SHIFTS_BUF_ADC_AVERAGE = 5;
+    
     IntegrCtrlGen_ctor( ); // Отключение ШИМ, назначение выводов как IO Ports
     ctrl = true;
     stepCnt = eSwitchedOff; // Начальная инициализация автомата состояний в положении выкл
@@ -303,13 +327,23 @@ void IntegrCtrl_ctor( void )
     sumBreak = 0;
     sumShortCircuit = 0;
     isActiveIntCtrl = false;
+    for( uint8_t i = 0; i < NUM_PHASES; i++ ) //инициализация структур кольцевых буферов
+    {    
+        statePhaseForAlarm[i] = eNorm;
+//        for( uint8_t j = 0; j < MIDDLE_VAL_WINDOW_SIZE; j++ )
+//            analogMeasAverage[i].buff[j] = 0;                      //буфер отсчётов        
+//        analogMeasAverage[i].index = 0;                            //индекс текущего отсчёта
+//        analogMeasAverage[i].averageVal = 0;                       //конечное усреднённое значение
+//        analogMeasAverage[i].sizeBuf = SIZE_BUF_ADC_AVERAGE;       //фактически используемый размер буфера
+//        analogMeasAverage[i].shifts = NUM_SHIFTS_BUF_ADC_AVERAGE;  //значение скользящего среднего
+    }
 }
 
 //*****************************************************************************
 // Управление работой алгоритма контроля целостности обмоток
 void IntegrCtrl_run( void )
 {
-    // Величина буфера для усреднения результата тестирования корректора и величина таймаута.
+    // Величина буфера для усреднения результата тестирования корректора и величина тайм-аута.
     static const uint8_t NUM_MEASURES_VALUES_U_FB_PHASE = 32, TIMEOUT_BEFORE_MEASURE_U_FB = 6;
     
     static const uint8_t NUM_SHIFTS = 5;               // Количество сдвигов при усреднении.
@@ -317,38 +351,45 @@ void IntegrCtrl_run( void )
     static const uint8_t NUM_OF_SEQUENTIAL_TEST_CORR_TRIES = 3; //если за это число попыток тест ККМ в норме - 
                                                                 //отсчитываем следующие 3 попытки
     static const uint8_t STEP_INC_CORR = 2;  //шаг приращения счётчика неудачных тестов ККМ
-    
+    static const uint8_t  T_O_SYNCHRO = 100;
     
     static uint8_t time_step; // Индекс временной зоны на этапе увеличения напряжения.
     static uint8_t stepVal;   // Шаг приращения по времени на этапе увеличения напряжения.
         
     //перечисление типов тестирования (целостность обмоток или корректора коэфф. мощности)
     static IntDetTypeTesting  typeTesting = eTestingIntegrCtrl;
-    static uint16_t cntTime;                    ///< Счётчик таймаутов.
+    static uint16_t cntTime;                    // Счётчик таймаутов.
     static uint32_t buffValUfb[NUM_PHASES];     // массив буфера  напряжения фаз сигнала (обратная связь)
     static uint8_t cntTestCorrFail[NUM_PHASES] = {0, 0, 0};
-    static uint8_t cntTriesTestCorr;          
+    static uint8_t cntTriesTestCorr;   //счётчик количества тестов ККМ, по которому принимается решение о его неисправности       
+    static uint8_t t_o_Synchro;
     
     
     if( cntTime ) 
         cntTime--;     //счётчик шагов автомата
-    
-    //Добавляем трассировку токов и напряжений по каждой фазе
-    if( stepCnt != eSwitchedOff &&  stepCnt != eStartTimeout )
+    if( ActivityManager_isActive( activityManager ) == false )
     {
-        for(uint8_t cnt = 0; cnt  < NUM_PHASES; cnt++  )
+        sumShortCircuit = 0;
+        sumBreak = 0;
+        for( uint8_t cnt = 0; cnt < NUM_PHASES; cnt++ ) 
         {
-            Tracing_parameter( InterChannel_getData( eICId_IV_value + cnt ), cnt );
-            Tracing_parameter( AnalogMeasurement_getData( eAinchUV + cnt )->value, cnt + 3 );
+           statePhaseForAlarm[cnt] = eNorm;
         }
+        failure = eNorm;               
+    }    
+    if( ++t_o_Synchro == T_O_SYNCHRO ) //Отправка в синхронизацию данных о состоянии рабочих цепей каждые в 100 мс.
+    {
+        if( !InterChannel_isHandling( eICId_IntegrCtrlScAndBreak ) )    
+            InterChannel_synchronize( eICId_IntegrCtrlScAndBreak, failure );
+        t_o_Synchro = 0;
     }
-        
+    
     switch( stepCnt )
     {
         case eSwitchedOff:              // Алгоритм выключен, ожидание включения
             if( ctrl )
             {
-                cntTime = START_TIMEOUT;    //работа модуля возможна по истечении таймаута START_TIMEOUT
+                cntTime = START_TIMEOUT;    //работа модуля возможна по истечении тайм-аута START_TIMEOUT
                 stepCnt = eStartTimeout;
             }
             break;
@@ -363,11 +404,12 @@ void IntegrCtrl_run( void )
                 for( uint8_t cnt = 0; cnt < NUM_PHASES; cnt++ ) 
                 {
                     buffValUfb[cnt] = 0; 
-                    cntTestCorrFail[cnt] = 0;
+                    statePhaseForAlarm[cnt] = 0;
                 }
                 sumBreak = 0;
                 sumShortCircuit = 0;
                 typeTesting = eTestingIntegrCtrl;
+                isSynchronizeScAndBreak = false;
                 stepCnt = eIncLevel;     // Переход к следующему шагу автомата  
             }
             break;
@@ -394,19 +436,6 @@ void IntegrCtrl_run( void )
             }
             else if( typeTesting == eTestingIntegrCtrl && ActivityManager_isActive( activityManager ) == true )
             {    
-                uint16_t phVolt1RMS = AnalogMeasurement_getData( otherPhaseIndex[maskSeqPh[dir][phase]][0] )->rms;
-                uint16_t phVolt2RMS = AnalogMeasurement_getData( otherPhaseIndex[maskSeqPh[dir][phase]][1] )->rms;
-                uint16_t phVolt1Val = AnalogMeasurement_getData( otherPhaseIndex[maskSeqPh[dir][phase]][0] )->value;
-                uint16_t phVolt2Val = AnalogMeasurement_getData( otherPhaseIndex[maskSeqPh[dir][phase]][1] )->value;
-                
-                if( phVolt1RMS >= THR_OF_UNSAFE_VOLTAGE_RMS 
-                    || phVolt2RMS >= THR_OF_UNSAFE_VOLTAGE_RMS 
-                    || phVolt1Val >= THR_OF_UNSAFE_VOLTAGE_VAL
-                    || phVolt2Val >= THR_OF_UNSAFE_VOLTAGE_VAL )
-                {
-                    //Переход в ЗС если на двух фазах формируется напряжениеболее порогового значения
-                    ERROR_EX_ID( eGrPS_IntegrCtrl, ePS_SafePhaseVoltage, phVolt1Val, phVolt2Val, phVolt1RMS, phVolt2RMS ); 
-                }    
                 strPhase[maskSeqPh[dir][phase]].currentPhase = InterChannel_getData( eICId_IV_value + 
                 maskSeqPh[dir][phase] );
                 // Рабочий диапазон с учётом "перезаброса"
@@ -420,9 +449,13 @@ void IntegrCtrl_run( void )
                         IntegrCtrlGen_setParam( maskSeqPh[dir][phase], level, typeTesting );
                         stepCnt = eSetPauseToOtherPhase;
                         sumShortCircuit++;
+                        statePhaseForAlarm[maskSeqPh[dir][phase]] = eShortCircuit;
                     }
                     else 
+                    {
+                        statePhaseForAlarm[maskSeqPh[dir][phase]] = eNorm;
                         stepCnt = eDecLevel;      // КЗ фазы нет - переход к следующему шагу автомата    
+                    }    
                 }
                 else
                 {
@@ -434,12 +467,33 @@ void IntegrCtrl_run( void )
                         stepVal = stepsMiddle[stand];
                     if( time_step == stepVal )
                     {
+                        { 
+                            uint8_t j = 0;
+                            //Добавляем трассировку, чтобы проанализировать данные напряжений всех фаз (мгновенное и рмс)
+                            for( uint8_t cnt = 0; cnt  < NUM_PHASES; cnt ++ )
+                            {
+                                Tracing_parameter( AnalogMeasurement_getData( eAinchUV + cnt )->value, j++ );
+                                Tracing_parameter( AnalogMeasurement_getData( eAinchUV + cnt )->rms, j++ );
+                            }
+                        }
+                        //Контролируем выходное напряжение на любой из двух нетестируемых фаз на переднем фронте сигнала
+                        int16_t phVolt1RMS = AnalogMeasurement_getData( otherPhIndex[maskSeqPh[dir][phase]][0] )->rms;
+                        int16_t phVolt2RMS = AnalogMeasurement_getData( otherPhIndex[maskSeqPh[dir][phase]][1] )->rms;
+                        if( phVolt1RMS >= THR_OF_UNSAFE_VOLTAGE_RMS 
+                            || phVolt2RMS >= THR_OF_UNSAFE_VOLTAGE_RMS )
+                        {
+                            //Переход в ЗС если на двух фазах формируется напряжение более порогового значения
+                            ERROR_EX_ID( eGrPS_IntegrCtrl, ePS_SafePhaseVoltage, otherPhIndex[maskSeqPh[dir][phase]][0], 
+                                    otherPhIndex[maskSeqPh[dir][phase]][1], phVolt1RMS, phVolt2RMS ); 
+                        }    
+                        
                         if( level < MAX_LEVEL ) 
                             level++;
                         else
                         {
                             stepCnt = eDecLevel;        //переход к уменьшению напряжения
                             sumBreak++;                 //увеличение счётчика обрыва фазы
+                            statePhaseForAlarm[maskSeqPh[dir][phase]] = eBreakOnePhase;
                         }
                         strPhase[maskSeqPh[dir][phase]].levelPhase = level;
                         // Установка фазы и уровня формирователя сигнала контроля целостности в минимум
@@ -523,7 +577,7 @@ void IntegrCtrl_run( void )
             stepCnt = ePauseToOtherPhase;               // Переход к следующему шагу автомата   
             break;
         case ePauseToOtherPhase:                        // Пауза перед переходом на другую фазу        
-            if( cntTime == 0 )                          // Время таймаута окончено
+            if( cntTime == 0 )                          // Время тайм-аута окончено
             {
                 // Если не все фазы пройдены, увеличить счётчик фазы, вернуться к началу автомата и повторить
                 if( ++phase < NUM_PHASES )
@@ -547,10 +601,6 @@ void IntegrCtrl_run( void )
                     sumBreak = 0;
                     // Установка времени паузы перед началом следующего цикла проверки
                     cntTime = PAUSE_BEFORE_NEXT_CHECK;
-                    
-                    //выдача в межпроцессорный обмен  состояния фаз (норма, КЗ, обрыв) 
-                    if( !InterChannel_isHandling( eICId_IntegrCtrlScAndBreak ) )    
-                        InterChannel_synchronize( eICId_IntegrCtrlScAndBreak, failure );
                     stepCnt = eWaitingForPeriod;               // Переход к следующему шагу автомата
                      
                 }
@@ -572,6 +622,7 @@ void IntegrCtrl_run( void )
         default:                            // Ошибка автомата состояний (неизвестное состояние)
             ERROR_ID( eGrPS_IntegrCtrl, ePS_IntegrCtrlStepCntError );
     }
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -611,6 +662,15 @@ void IntegrCtrl_turnOff( void )
     {
         ctrl = false;
         stepCnt = eSwitchedOff;
+        failure = eNorm;
+        if( !InterChannel_isHandling( eICId_IntegrCtrlScAndBreak ) )    
+        {
+            if( isSynchronizeScAndBreak == false )
+            {
+                InterChannel_synchronize( eICId_IntegrCtrlScAndBreak, failure );
+                isSynchronizeScAndBreak = true;
+            }
+        }
         IntegrCtrlGen_turnOff( );
     }
 }
@@ -618,11 +678,11 @@ void IntegrCtrl_turnOff( void )
 //*****************************************************************************
 /**
 * История изменений: 
-*
+* 
 * Версия 1.0.1
 * Дата   05-02-2018
 * Автор  Кругликов В.П.
-*
+* 
 * Изменения:
 *    Базовая редакция.
 *
@@ -632,6 +692,41 @@ void IntegrCtrl_turnOff( void )
 * 
 * Изменения:
 *   Разделены временные шаги приращения сигнала для рабочей нагрузки и для стенда
-*   всвязи с ложной подработкой КЗ (для рабочей нагрузки время требуется дольше, составляет 20мс, 
+*   в связи с ложной подработкой КЗ (для рабочей нагрузки время требуется дольше, составляет 20мс, 
 *   для стенда 10 мс)
+*
+* Версия 1.0.3
+* Дата   11-09-2020 
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   Добавлена следующая проверка выполнения критерия безопасности:
+*   при выдаче контрольного импульса тестирования на какую-либо из фаз 
+*   (то есть при отсутствии приказа от управляющей системы) проверяется то, 
+*   что на любой из остальных двух фазах отсутствует напряжение(как 
+*   среднеквадратическое значение, так и постоянная составляющая). 
+*  
+* Версия 1.0.4
+* Дата 16-09-2020 
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   Контроль выходного напряжения сделан после
+*   фильтра, вычисляющего скользящее среднее из отсчётов мгновенных значений АЦП размером 32 элемента 
+* 
+* Версия 1.0.5
+* Дата 15-10-2020 
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   Добавлен сброс состояния рабочих цепей при отключении контроля целостности рабочих цепей
+*   и выдача этого значения в поток синхронизации
+*
+* Версия 1.0.6
+* Дата 13-07-2021 
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   1. Переменная состояния рабочих цепей выдаётся  в поток синхронизации по таймауту 100 мс;
+*   2. Добавлено заполнение массива statePhaseForAlarm для формирования информации о состоянии каждой фазы сигнала управления двигателем 
 */

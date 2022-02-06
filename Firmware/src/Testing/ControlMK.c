@@ -2,9 +2,9 @@
 * \file    ControlMK.c
 * \brief   \copybrief ControlMK.h
 *
-* \version 1.0.1
-* \date    11-07-2016
-* \author  Третьяков В.Ж.
+* \version 1.0.2
+* \date    15-03-2021
+* \author  Агулов М.А.
 */
 
 //*****************************************************************************
@@ -22,6 +22,8 @@
 #include "CheckRAM.h"
 #include "CheckCPU.h"
 #include "CheckRegisters.h"
+#include "CheckCallFunctions.h"
+
 
 //*****************************************************************************
 // Реализация интерфейсных функций
@@ -33,9 +35,10 @@ void ControlMK_ctor( void )
 {
 #ifndef IGNORE_CONTROL_MK
     CheckRAM_ctor( );
-    #ifdef FLASH_CHECK_ENABLE
+    #ifndef IGNORE_CHECK_FLASH
         FlashCheck_ctor( );
     #endif
+    CheckCallFunctions_ctor();
 #endif
 }
 
@@ -44,12 +47,14 @@ void ControlMK_ctor( void )
 void ControlMK_run( void )
 {
 #ifndef IGNORE_CONTROL_MK
-    ASSERT_ID( eGrPS_ControlMK, ePS_ControlMkFaultCPU, CheckCPU_run());
-    ASSERT_ID( eGrPS_ControlMK, ePS_InterruptCPU, Main_getTimeWorkInterrupt() == 0 );
-    ASSERT_ID( eGrPS_ControlMK, ePS_ControlMkFaultRegisters, CheckRegisters_run());
-    #ifdef FLASH_CHECK_ENABLE
+    ASSERT_ID( eGrPS_ControlMK, ePS_ControlMkFaultCPU, CheckCPU_run( ) );
+    ASSERT_ID( eGrPS_ControlMK, ePS_InterruptCPU, Main_getTimeWorkInterrupt( ) == 0 );
+    ASSERT_ID( eGrPS_ControlMK, ePS_ControlMkFaultRegisters, CheckRegisters_run( ) );
+    #ifndef IGNORE_CHECK_FLASH
         FlashCheck_run( );
     #endif
+    CheckCallFunctions_run( );
+    MARKED_CALL_FUNCTION;
 #endif
 }
 
@@ -68,7 +73,14 @@ void ControlMK_run( void )
 * Версия 1.0.1
 * Дата   11-07-2016
 * Автор  Третьяков В.Ж.
-*
+* 
 * Изменения:
 *    Базовая версия.
+* 
+* Версия 1.0.2
+* Дата   15-03-2021
+* Автор  Агулов М.А.
+* 
+* Изменения:
+*   Коррекции связаны с изменением написанием макросов в файле defCompil.h
 */

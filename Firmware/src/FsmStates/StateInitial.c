@@ -13,7 +13,7 @@
 #include "Main.h"
 #include "States.h"
 #include "DebugTools.h"
-#include "deviceAddress.h"
+#include "DeviceAddress.h"
 #include "relayCtrl.h"
 #include "relayCtrlDrv.h"  // !!!временно
 
@@ -74,7 +74,8 @@ static bool StateInitial_onRun( void )
     static uint16_t timeCounter = TIME_INIT_ADDRESS; // Установка таймаута ожидания корректного адреса
     static bool notCorrect = false;
 
-    if( timeCounter ) timeCounter--; // Декремент счетчика времени
+    if( timeCounter ) 
+        timeCounter--; // Декремент счетчика времени
     if( DeviceAddress_isValid( ) )
     { // Получен корректный адрес
         // Реле не включены
@@ -100,7 +101,9 @@ static bool StateInitial_onRun( void )
 }
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
+//*****************************************************************************
+
 //*****************************************************************************
 /// \brief Определение константы состояния автомата "Состояние инициализации".
 ///

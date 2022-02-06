@@ -22,7 +22,7 @@
 #include "Rs422.h"
 
 //*****************************************************************************
-// ќпределение типов данных
+// ќбъ€вление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -85,20 +85,20 @@ void ActivityManager_setActiveCommand( ActivityManager_DeviceStr *str, bool pres
 void ActivityManager_setRS422connect( ActivityManager_DeviceStr *str, Rs422_numLine line, bool connect );
 
 //*****************************************************************************
-/// \brief ”становка состо€ни€ св€зи с ”— по интерфейсу RS-422.
-/// \param str - указатель на структуру состо€ни€;
-/// \param line - номер линии св€зи;
-/// \param connect - состо€ние св€зи (true (есть св€зь), false (нет св€зи)).
-///
-void ActivityManager_setRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line, bool connect );
-
-//*****************************************************************************
 /// \brief ѕолучает состо€ние активности прибора.
 /// \param str - указатель на структуру состо€ни€.
 /// \retval true  - активный;
 /// \retval false - пассивный.
 ///
 bool ActivityManager_isActive( ActivityManager_DeviceStr *str );
+
+//*****************************************************************************
+/// \brief ѕолучает состо€ние управлени€ реле.
+/// \param str - указатель на структуру состо€ни€.
+/// \retval true  - включить;
+/// \retval false - выключить.
+///
+bool ActivityManager_isRelayCtrlOn( ActivityManager_DeviceStr *str );
 
 //*****************************************************************************
 /// \brief ѕолучает состо€ние св€зи соседа c ”—.
@@ -108,14 +108,6 @@ bool ActivityManager_isActive( ActivityManager_DeviceStr *str );
 /// \retval false - нет св€зи.
 ///
 bool ActivityManager_getRS422neighborCtrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line );
-
-//*****************************************************************************
-/// \brief ѕолучает состо€ние управлени€ реле.
-/// \param str - указатель на структуру состо€ни€.
-/// \retval true  - включить;
-/// \retval false - выключить.
-///
-bool ActivityManager_isRelayCtrlOn( ActivityManager_DeviceStr *str );
 
 //*****************************************************************************
 /// \brief ѕолучает состо€ние соседа.
@@ -147,9 +139,29 @@ void ActivityManager_changeActivity( ActivityManager_DeviceStr *str, uint8_t val
 /// \retval false - инициализаци€ не завершена.
 bool ActivityManager_getInitDeviceState( ActivityManager_DeviceStr *str );
 
-#endif
+//*****************************************************************************
+///\brief ѕолучить информацию о том. слышит сосед мен€ или нет.
+/// \param str - указатель на структуру состо€ни€.
+/// \retval true  - сосед мен€ слышит.
+/// \retval false - сосед мен€ не слышит.
+bool ActivityManager_isNeighborHearsMe( ActivityManager_DeviceStr *str );
+
 
 //*****************************************************************************
+///\brief ѕолучить информацию о состо€ни€ положени€ стрелки своего прибора
+/// \param str - указатель на структуру состо€ни€.
+uint8_t ActivityManager_getOwnStatePosShift( ActivityManager_DeviceStr *str );
+
+        
+//*****************************************************************************
+///\brief ”становка состо€ни€ положени€ стрелки своего прибора
+/// \param str - указатель на структуру состо€ни€.
+/// \param state - устанавливаемое значение
+void ActivityManager_setOwnStatePosShift( ActivityManager_DeviceStr *str, uint8_t state );
+        
+#endif
+
+
 /**
 * »стори€ изменений: 
 * 

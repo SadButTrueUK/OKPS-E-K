@@ -56,13 +56,20 @@ uint16_t Eeprom_read( uint16_t addressCell );
 void Eeprom_write( uint16_t addressCell, uint16_t data );
 
 //*****************************************************************************
+/// \brief Старт записи в ячейку \a EEPROM 16-битного значения.
+/// \param addressCell – адрес ячейки \a EEPROM;
+/// \param data – значение для записи.
+///
+void Eeprom_write_start( uint16_t addressCell, uint16_t data );
+
+//*****************************************************************************
 /// \brief Готовность \a EEPROM к чтению или записи данных. 
 /// \details Предыдущая операция завершена.
 /// \retval true  - устройство готово;
 /// \retval false - устройство не готово.
 ///
 bool Eeprom_isReady( void );
-
+bool Eeprom_isReady__( void );
 #endif 
 
 //*****************************************************************************
@@ -70,6 +77,7 @@ bool Eeprom_isReady( void );
 * История изменений: 
 *
 * Версия 1.0.1
+* Дата   15-12-2016
 * Автор  Третьяков В.Ж.
 *
 * Изменения:

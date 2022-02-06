@@ -13,18 +13,17 @@
 #include <string.h>
 #include "Rs422.h"
 #include "Rs422_lineExch.h"
-#include "dsPIC33_rs422.h"
 #include "Rs422_dataTypes.h"
 #include "asserts_ex.h"
 #include "ConfigMK.h"
-#include "InterChannelID.h"
 #include "InterChannel.h"
 
+
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
-//*****************************************************************************
+//*****************************************************************************
 /// \brief Структура состояния данных RS-422.
 ///
 struct Rs422_handler_
@@ -35,7 +34,7 @@ struct Rs422_handler_
 };
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -46,21 +45,9 @@ static Rs422_handler handl =
     //Инициализация параметров линии 1
     .line_1.numLine = eRs422_line_1,
     .line_1.eICId_Rs422Sync = eICId_Rs422Sync_Rs1,
-    //    .line_1.iniPortCtrl = initPortContr_L1,
-    .line_1.iniUart = init_L1,
-    .line_1.inRS422.inByte = RxByte_L1,
-    .line_1.outRS422.outByte = TxByte_L1,
-    .line_1.outRS422.manageInOut = dirL1,
-    .line_1.outRS422.transmCompl = isTxCompl_L1,
     //Инициализация параметров линии 2 
     .line_2.numLine = eRs422_line_2,
     .line_2.eICId_Rs422Sync = eICId_Rs422Sync_Rs2,
-    //    .line_2.iniPortCtrl = initPortContr_L2,
-    .line_2.iniUart = init_L2,
-    .line_2.inRS422.inByte = RxByte_L2,
-    .line_2.outRS422.outByte = TxByte_L2,
-    .line_2.outRS422.manageInOut = dirL2,
-    .line_2.outRS422.transmCompl = isTxCompl_L2,
     //Инициализация общих параметров
     .state.ctrl = false
 };
@@ -78,9 +65,11 @@ Rs422_handler *Rs422_ctor( uint16_t addr, uint16_t noExchangeTime, uint16_t noEx
 
     //Инициализация state
     handl.state.numberCycleOK = 0;
-    for( i = 0; i < MAX_ALARM_COUNT; i++ ) handl.state.alarm[i] = 0;
+    for( i = 0; i < MAX_ALARM_COUNT; i++ ) 
+        handl.state.alarm[i] = 0;
     handl.state.numAlarm = 0;
-    for( i = 0; i < MAX_ORDER_DATA; i++ ) handl.state.order[i] = 0;
+    for( i = 0; i < MAX_ORDER_DATA; i++ ) 
+        handl.state.order[i] = 0;
     //Проверка длины телеграммы
     if( orderLength == 0 || orderLength > MAX_ORDER_DATA )
     {
@@ -88,7 +77,8 @@ Rs422_handler *Rs422_ctor( uint16_t addr, uint16_t noExchangeTime, uint16_t noEx
         ERROR_EX_ID( eGrPS_Rs422, ePS_Rs422SettingsError, 0xAAAA, orderLength, 0xBBBB, 0 );
     }
     handl.state.orderLength = orderLength;
-    for( i = 0; i < MAX_STATUS_DATA; i++ ) handl.state.status[i] = 0;
+    for( i = 0; i < MAX_STATUS_DATA; i++ ) 
+        handl.state.status[i] = 0;
     handl.state.statusLength = 0;
     handl.state.address = addr;
     handl.state.noExchangeTime = noExchangeTime;
@@ -102,7 +92,6 @@ Rs422_handler *Rs422_ctor( uint16_t addr, uint16_t noExchangeTime, uint16_t noEx
     Rs422_lineCtor( &handl.line_2 );
     handl.line_2.noExchangeCnt = noExchangeTime;
     handl.line_2.noExchangeCtrlSystemCnt = noExchangeTimeCtrlSystem;
-
     return &handl;
 }
 
@@ -123,8 +112,8 @@ void Rs422_interrupt( Rs422_handler *handler )
 {
     if( handl.state.ctrl ) // Обработку вызываем, если интерфейс включен
     {
-        Rs422_lineInterrupt( &handler->line_1, &handler->state );
-        Rs422_lineInterrupt( &handler->line_2, &handler->state );
+        Rs422_lineInterrupt( &handler->line_1 );
+        Rs422_lineInterrupt( &handler->line_2 );
     }
 }
 
@@ -154,18 +143,18 @@ bool Rs422_getLineEvent( Rs422_handler *handler, Rs422_numLine nLine )
 
     if( nLine == eRs422_line_1 )
     {
-        event = handler->line_1.exchangeEvent; //| handler->state.newOrderEvent;
-        //handler->state.newOrderEvent = false;
+        event = handler->line_1.exchangeEvent;
         handler->line_1.exchangeEvent = false;
-        if( event ) handler->state.isLineConnect = false;
+        if( event ) 
+            handler->state.isLineConnect = false;
         return event;
     }
     else if( nLine == eRs422_line_2 )
     {
-        event = handler->line_2.exchangeEvent; // | handler->state.newOrderEvent;
-        //handler->state.newOrderEvent = false;
+        event = handler->line_2.exchangeEvent; 
         handler->line_2.exchangeEvent = false;
-        if( event ) handler->state.isLineConnect = false;
+        if( event ) 
+            handler->state.isLineConnect = false;
         return event;
     }
     else return false;
@@ -244,7 +233,8 @@ void Rs422_addAlarm( Rs422_handler *handler, Rs422_alarmCode alarm )
     //Проверка наличия alarm в списке 
     for( i = 0; i < MAX_ALARM_COUNT; i++ )
     {
-        if( handler->state.alarm[i] == alarm ) break; // код аларма в списке уже есть 
+        if( handler->state.alarm[i] == alarm ) 
+            break; // код аларма в списке уже есть 
         else if( handler->state.alarm[i] == 0 )
         {   // весь список уже просмотрен
             handler->state.alarm[i] = alarm; // добавить в список код аларма
@@ -268,9 +258,11 @@ void Rs422_removeAlarm( Rs422_handler *handler, Rs422_alarmCode alarm )
             exist = true;
             break;
         }
-        else if( handler->state.alarm[i] == 0 ) break;
+        else if( handler->state.alarm[i] == 0 ) 
+            break;
     }
-    if( exist == false ) return; //В списке нет такого alarm
+    if( exist == false ) 
+        return; //В списке нет такого alarm
 
     //Удаляемый код последний в списке
     if( i == MAX_ALARM_COUNT - 1 )
@@ -282,7 +274,8 @@ void Rs422_removeAlarm( Rs422_handler *handler, Rs422_alarmCode alarm )
     for(; i < MAX_ALARM_COUNT - 1; i++ )
     {
         handler->state.alarm[i] = handler->state.alarm[i + 1];
-        if( handler->state.alarm[i] == 0 ) break;
+        if( handler->state.alarm[i] == 0 ) 
+            break;
     }
 }
 

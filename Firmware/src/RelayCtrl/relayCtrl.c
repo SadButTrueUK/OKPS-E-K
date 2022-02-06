@@ -19,6 +19,7 @@
 #include "ProtectionState_codes.h"
 #include "asserts_ex.h"
 #include "ActivityManager_dataTypes.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -35,7 +36,7 @@
 #define RPV_FAULT_TO  5000U                                          ///< Время неисправности реле.
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -67,19 +68,19 @@ typedef enum
 } CheckRpvState;
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 static const ArrayRelayCtrl *ptrRelCtrl;        ///< Указатель на переменную структуры интерфейса.
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 static uRelayCtrl_flags   flags;                   ///< Флаги состояния.
 static RelayCtrl_RpvState rpvState;                ///< Состояние неисправности реле РПВ.
 static uint16_t           switch220vCnt;           ///< Счетчик времени переключения питания 220 В.
 static CheckRpvState      stateCnt;                ///< Счетчик состояния.
-static uint8_t            switchTimeoutCnt;        ///< Счетчик таймаута переключения, мс.
-static uint16_t           faultTimeoutCnt;         ///< Счетчик таймаута неисправности, мс.
+static uint8_t            switchTimeoutCnt;        ///< Счетчик тайм-аута переключения, мс.
+static uint16_t           faultTimeoutCnt;         ///< Счетчик тайм-аута неисправности, мс.
 
 //*****************************************************************************
 // Прототипы локальных функций
@@ -130,6 +131,7 @@ void RelayCtrl_run( void )
         checkRpv( );
     }
     RelayCtrlDrv_switchTermoShunt( CheckSupply_is220vOn( ) );
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -185,46 +187,46 @@ RelayCtrl_RpvState RelayCtrl_getRpvState( void )
 void checkRpv( void )
 {
 
-    //Декремент счетчика таймаута неисправности
+    //Декремент счетчика тайм-аута неисправности
     if( faultTimeoutCnt != 0 )
     {
         faultTimeoutCnt--;
         return;
     }
-    else rpvState = eNormal; //Таймаут неисправности истек
-    //Декремент счетчика таймаута переключения
+    else rpvState = eNormal; //Тайм-аут неисправности истек
+    //Декремент счетчика тайм-аута переключения
     if( switchTimeoutCnt != 0 ) switchTimeoutCnt--;
     switch( stateCnt )
     {
         case eCheckOff: //Выключено
             if( flags.str.rpvCtrl )
             { //Включили
-                switchTimeoutCnt = SWITCH_ON_TO; //Взвести таймаут включения
+                switchTimeoutCnt = SWITCH_ON_TO; //Взвести тайм-аут включения
                 stateCnt = eCheckOn;
                 break;
             }
-            if( switchTimeoutCnt ) break; //Таймаут выключения не истек
+            if( switchTimeoutCnt ) break; //Тайм-аут выключения не истек
             //Проверка разомкнутых выходных контактов
             if( BinIn_isRpvOnMe( ) )
             { //Ошибка, контакты замкнуты
                 rpvState = eNotTurnOff; //Контакты не размыкаются
-                faultTimeoutCnt = RPV_FAULT_TO; //Установить таймаут неисправности
+                faultTimeoutCnt = RPV_FAULT_TO; //Установить тайм-аут неисправности
                 break;
             }
             break;
         case eCheckOn: //Включено
             if( flags.str.rpvCtrl == 0 )
             { //Выключили
-                switchTimeoutCnt = SWITCH_OFF_TO; //Взвести таймаут выключения
+                switchTimeoutCnt = SWITCH_OFF_TO; //Взвести тайм-аут выключения
                 stateCnt = eCheckOff;
                 break;
             }
-            if( switchTimeoutCnt ) break; //Таймаут включения не истек
+            if( switchTimeoutCnt ) break; //Тайм-аут включения не истек
             //Проверка замкнутых выходных контактов
             if( !BinIn_isRpvOnMe( ) )
             { //Ошибка, контакты разомкнуты
                 rpvState = eNotTurnOn; //Контакты не замыкаются
-                faultTimeoutCnt = RPV_FAULT_TO; //Установить таймаут неисправности
+                faultTimeoutCnt = RPV_FAULT_TO; //Установить тайм-аут неисправности
                 break;
             }
             break;

@@ -2,8 +2,8 @@
 * \file    ActivityManager_internal.c
 * \brief   \copybrief ActivityManager_internal.h
 *
-* \version 1.0.1
-* \date    19-05-2017
+* \version 1.0.2
+* \date    9-04-2021
 * \author  Кругликов В.П.
 */
 
@@ -52,6 +52,7 @@ void ActivityManager_writeNeighborIsInWork( ActivityManager_DeviceStr *str, bool
    str->inputData.str.neighborIsInWork = state;
 }
 
+
 //*****************************************************************************
 // Установка состояния связи соседа по интерфейсу RS-422
 void ActivityManager_setNeighborRS422connect( ActivityManager_DeviceStr *str, Rs422_numLine line, bool connect )
@@ -63,13 +64,42 @@ void ActivityManager_setNeighborRS422connect( ActivityManager_DeviceStr *str, Rs
 }
 
 //*****************************************************************************
-// Установка состояния связи соседа с УС по интерфейсу RS-422
-void ActivityManager_setNeighborRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line, bool connect )
+//Получить состояние связи соседа с УС по интерфейсу RS-422;
+bool ActivityManager_getNeighborRS422connect( ActivityManager_DeviceStr *str )
 {
-    if( line == eRs422_line_1 ) 
-        str->rs422.str.neighborLine1CtrlSystemConnect = connect;
-    else if( line == eRs422_line_2 ) 
-        str->rs422.str.neighborLine2CtrlSystemConnect = connect;
+    static const uint16_t TIMEOUT_NO_EXCH_VAL = 1500;
+    static uint16_t timeout = 0;
+    static bool ret = false;
+   
+    if( str->rs422.str.neighborLine1CtrlSystemConnect == 0
+        || str->rs422.str.neighborLine1CtrlSystemConnect == 0 )
+    {
+        
+        if( ++timeout >= TIMEOUT_NO_EXCH_VAL )
+        {
+            timeout = 0;
+            ret = true;
+        }
+    }
+    else
+    {
+        timeout = 0;
+        ret = false;
+    }
+    return ret;
+}
+//*****************************************************************************
+// Установка состояния связи соседа с УС по интерфейсу RS-422
+void ActivityManager_setNeighborPositionShunt( ActivityManager_DeviceStr *str, uint8_t state )
+{
+    str->inputData.str.neighborStatePosShift = state;
+}
+
+//*****************************************************************************
+// Получить состояние связи соседа с УС по интерфейсу RS-422
+uint8_t ActivityManager_getNeighborPositionShunt( ActivityManager_DeviceStr *str )
+{
+    return str->inputData.str.neighborStatePosShift;
 }
 
 //*****************************************************************************
@@ -92,13 +122,9 @@ bool ActivityManager_getRS422connect( ActivityManager_DeviceStr *str, Rs422_numL
 
 //*****************************************************************************
 // Получает состояние связи c УС
-bool ActivityManager_getRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line )
+uint8_t ActivityManager_getOwnStatePosShift( ActivityManager_DeviceStr *str )
 {
-    if( line == eRs422_line_1 ) 
-        return str->rs422.str.ownLine1CtrlSystemConnect;
-    if( line == eRs422_line_2 ) 
-        return str->rs422.str.ownLine2CtrlSystemConnect;
-    return false;
+    return str->inputData.str.ownStatePosShift;
 }
 
 //*****************************************************************************
@@ -110,5 +136,12 @@ bool ActivityManager_getRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs4
 * Автор  Кругликов В.П.
 * 
 * Изменения:
-*     Базовая версия.
+*   Базовая версия.
+* 
+* Версия 1.0.2
+* Дата   9-04-2021
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   Добавлен новый интерфейс ActivityManager_getNeighborRS422connect(
 */

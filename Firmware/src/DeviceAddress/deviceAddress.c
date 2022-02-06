@@ -1,6 +1,6 @@
 /**
-* \file    deviceAddress.c
-* \brief   \copybrief deviceAddress.h
+* \file    DeviceAddress.c
+* \brief   \copybrief DeviceAddress.h
 *
 * \version 1.0.1
 * \date    27-03-2017
@@ -10,12 +10,17 @@
 //*****************************************************************************
 // Подключаемые файлы
 //*****************************************************************************
-#include "deviceAddress.h"
+#include "DeviceAddress.h"
 #include "BinIn.h"
 #include "Rs422_crc8.h"
 #include "ProtectionState_codes.h"
 #include "asserts_ex.h"
 #include "WorkWithBits.h"
+#include "CheckCallFunctions.h"
+#include "Eeprom.h"
+#include "addressVarEeprom.h"
+#include "DebugTools.h"
+#include "MessageVersion.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -23,8 +28,9 @@
 
 //*****************************************************************************
 #define FAILURE_TRANSITION_T_O 20000        ///< Время перехода в ЗС.
-#define FIRST_CHECK_T_O        300          ///< Таймаут повторения первичной проверки.
-#define PERIODIC_CHECK_T_O     5000         ///< Таймаут периодической проверки.
+#define FIRST_CHECK_T_O        300          ///< Тайм-аут повторения первичной проверки.
+#define PERIODIC_CHECK_T_O     5000         ///< Тайм-аут периодической проверки.
+#define NUM_CALIBRATIONS       2            ///< Количество калибровочных данных (калибровка в "+" и в "-")
 
 //*****************************************************************************
 // Кодирование типа модуля реле
@@ -44,7 +50,10 @@
 #define MCT06_190V  0b01011                 ///< Двигатель MCT06, 190 В.
 
 //*****************************************************************************
-// Определение типов данных
+// Кодирование типа двигателя и напряжение питания двигателя
+#define MAGIC_WORD  0x1059
+//*****************************************************************************
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -52,8 +61,14 @@
 ///
 typedef enum
 {
-    eDeviceAddr_firstCheck  = 0,        ///< первичная проверка
-    eDeviceAddr_periodCheck             ///< периодическая проверка
+    eDeviceAddr_firstCheck  = 0,                ///< первичная проверка
+    eDeviceAddr_periodCheck,                    ///< периодическая проверка
+    eDeviceAddr_WriteEEPROM_addr,               ///< Запись адреса в EEPROM
+    eDeviceAddr_WriteEEPROM_config,             ///< Запись конфигурации в EEPROM
+    eDeviceAddr_WriteEEPROM_crc,                ///< Запись CRC в EEPROM
+    eDeviceAddr_WriteEEPROM_status,                ///< Запись CRC в EEPROM   
+    eDeviceAddr_WaitingForWriteCompleteEEPROM,   ///< Ожидание завершения записи в EEPROM
+    eDeviceAddr_WaitingForWriteCompleteEEPROM1        
 } eDeviceAddr_Run;
 
 //*****************************************************************************
@@ -105,7 +120,7 @@ typedef struct
 } DeviceAddr_flags;
 
 //*****************************************************************************
-/// \brief Обьединение флагов модуля с \a uint8_t.
+/// \brief Объединение флагов модуля с \a uint8_t.
 ///
 typedef union
 {
@@ -114,18 +129,35 @@ typedef union
 } uDeviceAddr_flags;
 
 //*****************************************************************************
-// Определение локальных переменных
+/// \brief Данные режима калибровки.
+///
+typedef struct
+{
+    uint16_t address;               ///< Адрес, прочитанный из EEPROM при включении прибора.
+    uint16_t config;                ///< Конфигурация, прочитанная из EEPROM при включении прибора.
+    uint16_t crc;                   ///< CRC, прочитанная из EEPROM при включении прибора.
+    uint16_t threshold_p;          ///< Калибровочное значение тока в режиме перевода в плюс.    
+    uint16_t threshold_m;          ///< Калибровочное значение тока в режиме перевода в минус.        
+    uint16_t increasedTime_p;      ///< значение увеличенного тока времнени при калибровочном переводе в плюс
+    uint16_t increasedTime_m;      ///< значение увеличенного тока времнени при калибровочном переводе в минус
+} DeviceAddr_calibr;
+
+
+//*****************************************************************************
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
 static          DeviceAddr_Jumpers    jumpers;         ///< Состояние установленных перемычек.
 static          uDeviceAddr_Addr      address;         ///< Адрес устройства.
 static          uDeviceAddr_Config    config;          ///< Конфигурация устройства.
-static uint16_t failureTimeoutCnt;                     ///< Счетчик таймаута перехода в ЗС.
-static uint16_t timeoutCnt;                            ///< Счетчик таймаута проверки.
+static uint16_t failureTimeoutCnt;                     ///< Счетчик тайм-аута перехода в ЗС.
+static uint16_t timeoutCnt;                            ///< Счетчик тайм-аута проверки.
 static          eDeviceAddr_Run       ctrlCnt;         ///< Счетчик состояния.
 static          DeviceAddress_sysType sys_Type;        ///< Тип системы.
+static          DeviceAddr_calibr     calibr;          ///< Данные о калибровке прибора.
 
+static const char SerialNumber[16] = "1234567";
 //*****************************************************************************
 /// \brief Флаги модуля.
 ///
@@ -144,39 +176,63 @@ void DeviceAddress_ctor( void )
 {
     address.value = 0;
     config.value = 0;
-    failureTimeoutCnt = FAILURE_TRANSITION_T_O;    //Установить таймаут перехода в ЗС
-    timeoutCnt = FIRST_CHECK_T_O;                  //Установить таймаут первичной проверки 
-    ctrlCnt = eDeviceAddr_firstCheck;              //Переход к выполнению первичной проверки
-    flags.str.ctrl = 1;                            //Включить модуль
+    failureTimeoutCnt = FAILURE_TRANSITION_T_O;                 //Установить тайм-аут перехода в ЗС
+    timeoutCnt = FIRST_CHECK_T_O;                               //Установить тайм-аут первичной проверки 
+    ctrlCnt = eDeviceAddr_firstCheck;                           //Переход к выполнению первичной проверки
+
+
+    // Запись в EEPROM серийного номера прибора
+    if ( Eeprom_read(ADDRESS_EEPROM_MAGIC_WORD) != MAGIC_WORD)
+    {
+        for (uint8_t i=0; ; i += 2 )
+        {
+            Eeprom_write( ADDRESS_EEPROM_MANUFACTURERS_NUMBER + i, SerialNumber[i]<<8 | SerialNumber[i+1]);
+            
+            if (SerialNumber[i] == 0 || SerialNumber[i+1] == 0 )
+                break;
+        }
+        
+        Eeprom_write(ADDRESS_EEPROM_MAGIC_WORD, MAGIC_WORD);
+    }
+    
+    
+    
+    // Чтение из EEPROM пороговых значений тока калибровки        
+    calibr.crc     = Eeprom_read( ADDRESS_EEPROM_CALIBR_CRC );
+    calibr.config  = Eeprom_read( ADDRESS_EEPROM_CALIBR_CONF );
+    calibr.address = Eeprom_read( ADDRESS_EEPROM_CALIBR_ADDR );
+    calibr.threshold_p  = Eeprom_read( ADDRESS_EEPROM_CALIBR_THRESHOLD_P );
+    calibr.threshold_m  = Eeprom_read( ADDRESS_EEPROM_CALIBR_THRESHOLD_M );    
+    calibr.increasedTime_m = Eeprom_read( ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_M );
+    calibr.increasedTime_p = Eeprom_read( ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_P );
+
+    flags.str.ctrl = 1;                                         //Включить = Eeprom_read( ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_M );
 }
 
 //*****************************************************************************
 // Управление работой
 void DeviceAddress_run( void )
 {
-    uint8_t crc8;
-    if( flags.str.ctrl == 0 ) return; //Модуль не включен
-    //Декремент таймаутов
-    if( failureTimeoutCnt != 0 ) failureTimeoutCnt--;
-    if( timeoutCnt != 0 ) timeoutCnt--;
+    if( flags.str.ctrl == 0 )
+        return;                               //Модуль не включен
+
+    failureTimeoutCnt == 0 ? : failureTimeoutCnt--;
+    timeoutCnt        == 0 ? : timeoutCnt--;
+
     switch( ctrlCnt )
     {
-        case eDeviceAddr_firstCheck: //Первичная проверка
-            //Проверка таймаута перехода в ЗС
-            if( failureTimeoutCnt == 0 )
-            { //Переход в ЗС
-                ERROR_ID( eGrPS_DeviceAddress, ePS_DeviceAddressFirstCheckError );
-            }
-            //Ожидание таймаута для выполнения проверки
-            if( timeoutCnt != 0 ) break;
+        case eDeviceAddr_firstCheck:                    //Проверка при первом включении
+            ASSERT_ID( eGrPS_DeviceAddress, ePS_DeviceAddressFirstCheckError, failureTimeoutCnt != 0 );                       //Проверка тайм-аута перехода в ЗС
+
+            //Ожидание тайм-аута для выполнения проверки
+            if( timeoutCnt != 0 ) 
+                break;
+
             jumpers.addr.value = BinIn_getAddrJumpers( );
             jumpers.conf.value = BinIn_getConfigJumpers( );
-            jumpers.crc = BinIn_getCrcJumpers( );
-            //Вычисление CRC8
-            crc8 = crc8_update( 0xFF, jumpers.addr.array, 2 );
-            crc8 = crc8_update( crc8, &jumpers.conf.value, 1 );
-            //Проверка CRC8
-            if( /*jumpers.crc == 0 || */ jumpers.crc != crc8 )
+            jumpers.crc        = BinIn_getCrcJumpers( );
+
+            if( jumpers.crc != crc8_update( crc8_update( 0xFF, jumpers.addr.array, 2 ), &jumpers.conf.value, 1 ) )
             {
                 //Проверка не пройдена
                 timeoutCnt = FIRST_CHECK_T_O;
@@ -236,34 +292,79 @@ void DeviceAddress_run( void )
             address.value = jumpers.addr.value;
             SETBIT( address.array[0], 0 );
             CLEARBIT( address.array[1], 0 );
-            flags.str.validity = 1; //Считанные данные корректны
-            //Первичная проверка окончена, задаю таймауты для периодической проверки
-            timeoutCnt = PERIODIC_CHECK_T_O;
+            flags.str.validity = 1;                             //Считанные данные корректны
+            
+            //Первичная проверка окончена, задаю тайм-ауты для периодической проверки
+            timeoutCnt        = PERIODIC_CHECK_T_O;
             failureTimeoutCnt = FAILURE_TRANSITION_T_O;
-            ctrlCnt = eDeviceAddr_periodCheck;
+
+            // Проверка значения адреса калибровки из EEPROM фактически установленному адресу
+            if (calibr.address != jumpers.addr.value || calibr.config != jumpers.conf.value || calibr.crc != jumpers.crc)
+                ctrlCnt = eDeviceAddr_WriteEEPROM_addr;         // Запись нового адреса прибора в EEPROM
+            else
+                ctrlCnt = eDeviceAddr_periodCheck;              // Адрес не поменялся, можно продолжать работу
             break;
-        case eDeviceAddr_periodCheck: //Периодическая проверка
-            //Проверка таймаута перехода в ЗС
-            if( failureTimeoutCnt == 0 )
-            { //Переход в ЗС
-                ERROR_ID( eGrPS_DeviceAddress, ePS_DeviceAddressCheckError );
-            }
-            //Ожидание таймаута для выполнения проверки
-            if( timeoutCnt != 0 ) break;
-            if( jumpers.addr.value != BinIn_getAddrJumpers( ) ||
-                jumpers.conf.value != BinIn_getConfigJumpers( ) ||
-                jumpers.crc != BinIn_getCrcJumpers( ) )
-            {
-                //Периодическая проверка не пройдена
-                timeoutCnt = PERIODIC_CHECK_T_O;
+
+        case eDeviceAddr_WriteEEPROM_addr:
+            Eeprom_write_start(ADDRESS_EEPROM_CALIBR_ADDR, calibr.address = jumpers.addr.value);                        // Начинаем запись в EEPROM адреса прибора
+            ctrlCnt = eDeviceAddr_WriteEEPROM_config;
+            break;
+
+        case eDeviceAddr_WriteEEPROM_config:
+            if (Eeprom_isReady() == false)
                 break;
-            }
-            timeoutCnt = PERIODIC_CHECK_T_O;
-            failureTimeoutCnt = FAILURE_TRANSITION_T_O;
+            Eeprom_write_start(ADDRESS_EEPROM_CALIBR_CONF, calibr.config = jumpers.conf.value);  // Начинаем запись в EEPROM конфигурации прибора
+            ctrlCnt = eDeviceAddr_WriteEEPROM_crc;
             break;
+
+
+        case eDeviceAddr_WriteEEPROM_crc:
+            if (Eeprom_isReady() == false)
+                break;
+            Eeprom_write_start(ADDRESS_EEPROM_CALIBR_CRC, calibr.crc = jumpers.crc);           // Начинаем запись в EEPROM CRC
+            ctrlCnt =  eDeviceAddr_WriteEEPROM_status;
+            break;
+
+        case eDeviceAddr_WriteEEPROM_status:
+            if (Eeprom_isReady() == false)
+                break;
+            Eeprom_write_start(ADDRESS_EEPROM_CALIBR_THRESHOLD_P, 0x0000);                     // Начинаем запись в EEPROM Status (сбрасываем признаки калибровки))
+            ctrlCnt = eDeviceAddr_WaitingForWriteCompleteEEPROM;
+            break;
+
+            
+        case eDeviceAddr_WaitingForWriteCompleteEEPROM:
+            if (Eeprom_isReady() == false)
+                break;
+            Eeprom_write_start(ADDRESS_EEPROM_CALIBR_THRESHOLD_M, 0x0000);                                   // Начинаем запись в EEPROM Status (сбрасываем признаки калибровки))          
+            ctrlCnt = eDeviceAddr_WaitingForWriteCompleteEEPROM1;
+            break;
+
+
+        case eDeviceAddr_WaitingForWriteCompleteEEPROM1:
+            if (Eeprom_isReady() )
+            {
+                ctrlCnt = eDeviceAddr_periodCheck;
+            }
+            break;
+            
+        case eDeviceAddr_periodCheck: //Периодическая проверка
+            ASSERT_ID( eGrPS_DeviceAddress, ePS_DeviceAddressCheckError, failureTimeoutCnt != 0 );                       //Проверка тайм-аута перехода в ЗС
+
+            if( timeoutCnt != 0 )                                                                                       //Ожидание тайм-аута для выполнения проверки
+                break;
+            if( jumpers.addr.value == BinIn_getAddrJumpers( ) && jumpers.conf.value == BinIn_getConfigJumpers( ) &&
+                jumpers.crc == BinIn_getCrcJumpers( ) )
+            {
+                failureTimeoutCnt = FAILURE_TRANSITION_T_O;                                                             // Проверка проёдена - сбрасываем таймер
+            }    
+            timeoutCnt = PERIODIC_CHECK_T_O;
+            break;
+
         default:
             ERROR_ID( eGrPS_DeviceAddress, ePS_DeviceAddressStepCntError );
     }
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -307,6 +408,50 @@ MotorType DeviceAddress_getMotorType( void )
 {
     return config.str.motorType;
 }
+
+//*****************************************************************************
+// Получить состояние калибровки (наличие калибровки) 
+bool DeviceAddress_getIsCalibrPresents( CalibrDir dir )
+{
+    if (dir == Plus)
+        return calibr.threshold_p == 0 ? false : true;
+    else
+        return calibr.threshold_m == 0 ? false : true;
+}
+
+//*****************************************************************************
+// Получить значения тока калибровки 
+uint16_t DeviceAddress_getCalibrCurrent( CalibrDir dir )
+{
+        return dir == Plus ? calibr.threshold_p : calibr.threshold_m;
+}
+
+uint16_t DeviceAddress_getIncreasedTime( CalibrDir dir )
+{
+        return dir == Plus ? calibr.increasedTime_p : calibr.increasedTime_m;
+}
+
+//*****************************************************************************
+// Установить значение тока калибровки и начать его запись в EEPROM
+void DeviceAddress_setCalibrCurrentAndTime( CalibrDir dir, uint16_t current, uint16_t timeValue )
+{
+    if (dir == Plus)
+    {
+//        Eeprom_write_start(ADDRESS_EEPROM_CALIBR_THRESHOLD_P, current ); 
+        calibr.threshold_p = current;
+//        Eeprom_write_start(ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_P, timeValue );
+        calibr.increasedTime_p = timeValue;
+    }
+    else
+    {
+//        Eeprom_write_start(ADDRESS_EEPROM_CALIBR_THRESHOLD_M, current ); 
+        calibr.threshold_m = current;
+//        Eeprom_write_start(ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_M, timeValue );
+        calibr.increasedTime_m = timeValue;
+    }
+}
+
+
 
 //*****************************************************************************
 /**

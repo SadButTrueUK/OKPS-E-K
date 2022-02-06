@@ -14,18 +14,17 @@
 #include "Eeprom.h"
 #include "Main.h"
 #include "BinIn.h"
-#include "deviceAddress.h"
+#include "DeviceAddress.h"
 #include "States.h"
 #include "CheckSupply.h"
 #include "AnalogMeasurement.h"
 #include "OverloadDet.h"
-#include "posDetGenerator.h"
-#include "FlashCheck.h"
 #include "ControlMK.h"
 #include "asserts_ex.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -37,7 +36,7 @@ static Fsm fsm;        ///< Дочерние состояния для корневого состояния ДКА.
 
 //*****************************************************************************
 /// \brief Обработка корневого состояния ДКА.
-/// \note Вызываются методы \a run для всех компонентов, нетребующих дополнительной инициализации
+/// \note Вызываются методы \a run для всех компонентов, не требующих дополнительной инициализации
 /// в основном цикле работы с периодом 1 мс.
 ///
 static bool StateTop_onRun( void );
@@ -50,8 +49,9 @@ static bool StateTop_onRun( void );
 // Обработка корневого состояния ДКА.
 static bool StateTop_onRun( void )
 {
-    ControlMK_run();
+    ControlMK_run( );
     InterChannel_run( );
+    Rs422_run( rs422 );
     AnalogMeasurement_run( );
     Eeprom_run( );
     BinIn_run( );
@@ -63,12 +63,11 @@ static bool StateTop_onRun( void )
     Indication_run( &ledLossCtrl );
     CheckSupply_run( );
     OverloadDet_run( );
-
     return true;
 }
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************

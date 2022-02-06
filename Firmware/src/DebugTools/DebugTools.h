@@ -27,7 +27,7 @@
 //*****************************************************************************
 //#define ENABLE_DEBUG_PINS      ///< ¬ключает отладочные пины.
 #define ENABLE_DEBUG_SPI         ///< ¬ключает отладочный \a SPI.
-//#define SPI_TEST               ///< ¬ключает тест шины \a SPI (передача чисел от 0 до 99).
+#define SPI_TEST               ///< ¬ключает тест шины \a SPI (передача чисел от 0 до 99).
 //#define    DEBUG_VERSION       ///< ¬ключает сообщени€ warning при компил€ции о режиме работы DebugTools.
 
 #define INI_TEST3           INIC_PORT_OUT( B, 0, eIO_openDrainOff )        ///< »нициализаци€ пина TEST3.

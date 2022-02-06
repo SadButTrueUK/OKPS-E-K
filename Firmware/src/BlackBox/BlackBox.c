@@ -16,7 +16,7 @@
 #include "Eeprom.h"
 #include "addressVarEeprom.h"
 #include "InterChannel.h"
-#include "Ecan_driverPIC33.h"
+#include "EcanDriver.h"
 #include "wait.h"
 #include "Main.h"
 #include "MainRegisters.h"
@@ -40,7 +40,7 @@
 #define N_FILE_ASSERT                       15
 
 //*****************************************************************************
-// ќпределение локальных переменных
+// ќбъ€вление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -144,7 +144,7 @@ void BlackBox_read( void )
     drvPtr = Ecan_ctor( eEcan1, 
                         ConfigMK_isMaster() ? ADDRESS_CAN_EXTERNAL_DEVICE_MASTER : ADDRESS_CAN_EXTERNAL_DEVICE_SLAVE, 
                         ConfigMK_isMaster() ? ADDRESS_CAN_EXTERNAL_DEVICE_SLAVE  :  ADDRESS_CAN_EXTERNAL_DEVICE_MASTER,
-                        eNormalMode, 8 );
+                        eEcanModeNormal, 8 );
 
     for( i = 0; i < SIZE_EEDATA; i += 4)
     {

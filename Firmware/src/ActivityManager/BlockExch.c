@@ -2,8 +2,8 @@
 * \file    BlockExch.c
 * \brief   \copybrief BlockExch.h
 *
-* \version 1.0.1
-* \date    22-05-2017
+* \version 1.0.3
+* \date    9-04-2021
 * \author  Кругликов В.П.
 */
 
@@ -21,25 +21,27 @@
 #include "DeviceAddress.h"
 #include "Main.h"
 #include "ConfigMK.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
 //*****************************************************************************
 
 //*****************************************************************************
-#define T_O_DATA_SYNCHRO    5             ///< Таймаут синхронизации принятых данных, мс.
+#define T_O_DATA_SYNCHRO    3 //5         ///< Таймаут синхронизации принятых данных, мс.
 #define SYNCHRO_EXCHANGE    0xAAAA        ///< Значение синхронизации начала обмена.
 #define SYNCHRO_EXCHANGE_TO 100           ///< Таймаут синхронизации начала обмена, мс.
+#define T_O_FOR_PROCESSING  2             ///< Таймаут для обработки смены активости в менеджере активности.
 
 //*****************************************************************************
-// Определение глобальных типизированных констант
+// Объявление глобальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************
 const void *BlockExch_drvStr;              ///< Указатель на драйвер.
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -48,8 +50,9 @@ const void *BlockExch_drvStr;              ///< Указатель на драйвер.
 typedef enum
 {
     eRecept_begin   = 0,        ///< ожидание принятых данных
-    eRecept_synchro             ///< ожидание результата синхронизации данных
-} eRecept_run;
+    eRecept_synchro,            ///< ожидание результата синхронизации данных
+    eRecept_timeout            ///<  таймаут для обработки в мнеджере активности        
+} Recept_run;
 
 //*****************************************************************************
 /// \brief Тип структуры приема данных с линии связи.
@@ -58,7 +61,7 @@ typedef struct
 {
     uint8_t     buffArr[MAX_DATA_LENGTH];        ///< Буфер данных.
     uint8_t     syncTimeOutCnt;                  ///< Счетчик таймаута синхронизации.
-    eRecept_run runCnt;                          ///< Счетчик состояния приема данных.
+    Recept_run  runCnt;                          ///< Счетчик состояния приема данных.
 } ReceptStr;
 
 //*****************************************************************************
@@ -76,13 +79,15 @@ struct BlockExch_Str_
     uint16_t  noExchangeCnt;                          ///< Счетчик времени отсутствия обмена.
     bool      ctrl;                                   ///< Включение обмена.
     bool      startSync;                              ///< Флаг синхронизации начала обмена.
-    uint16_t  myData;                                 ///< данные, пеедаваемые в МКО своего МК
+    uint16_t  myData;                                 ///< данные, передаваемые в МКО своего МК
     uint16_t  neighborData;                           ///< данные, получаемые из МКО соседа
     uint8_t   countInvalidTransact;                   ///< счётчик пакетов с ошибочными значениями контрольной суммы 
+    bool      isProcessedCorrectData;                 ///< флаг полученных корректных данных
+    uint8_t   timeForProcessing;                      ///< таймаут для обработки переключения активности
 };
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -92,7 +97,8 @@ static BlockExch_Str bExchStr =
 {
     .ctrl = false,
     .startSync = false,
-    .countInvalidTransact = 0
+    .countInvalidTransact = 0,
+    .isProcessedCorrectData = false 
 };
 
 //*****************************************************************************
@@ -159,11 +165,12 @@ BlockExch_Str *BlockExch_ctor( uint8_t length, uint16_t noExchangeTime )
     
     //Взвести таймаут синхронизации 
     bExchStr.inStr.syncTimeOutCnt = SYNCHRO_EXCHANGE_TO;
+    bExchStr.timeForProcessing = T_O_FOR_PROCESSING;
     return &bExchStr;
 }
 
 //*****************************************************************************
-//Проверка того, что собітия синхронизации своего параметра и параметра соседи наступили
+//Проверка того, что события синхронизации своего параметра и параметра соседи наступили
 static void checkSyncEvents( void )
 {
     if( InterChannel_syncEvent( bExchStr.eICId_BlockExchMy ) )
@@ -185,6 +192,7 @@ void BlockExch_run( BlockExch_Str *str )
     if( str->noExchangeCnt != 0 ) str->noExchangeCnt--;
     transmitionRun( str );
     receptionRun( str );
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -233,6 +241,14 @@ bool BlockExch_getData( BlockExch_Str *str, uint8_t *data )
 bool BlockExch_getConnectionState( BlockExch_Str *str )
 {
     return str->noExchangeCnt != 0;
+}
+
+
+//*****************************************************************************
+// Получает значение бита наличия новых корректных данных
+bool BlockExch_getIsProcessedCorrectData( void )
+{
+     return bExchStr.isProcessedCorrectData; 
 }
 
 //*****************************************************************************
@@ -287,12 +303,13 @@ void receptionRun( BlockExch_Str *str )
                     str->noExchangeCnt = str->timeNoExchange;
                     //Переход к ожиданию следующей посылки 
                     str->countInvalidTransact = 0; //обнулить счётчик ошибок
+                    bExchStr.isProcessedCorrectData = true;
                 }
                 else 
                 {    
                     str->countInvalidTransact++;
                 }
-                str->inStr.runCnt = eRecept_begin;
+                str->inStr.runCnt = eRecept_timeout;
             }
             if (str->countInvalidTransact >= NUM_INVALID_TRANSACTIONS )    
                     ERROR_EX_ID( eGrPS_BlockExch, ePS_BlockExchErrorReceive,
@@ -301,10 +318,18 @@ void receptionRun( BlockExch_Str *str )
                              str->inStr.buffArr[0], //принятые данные 
                              str->inStr.buffArr[1] ); //принятая CRC
             break;
+        case eRecept_timeout:
+            if( --( bExchStr.timeForProcessing ) == 0 )
+            {    
+                bExchStr.timeForProcessing = T_O_FOR_PROCESSING;
+                bExchStr.isProcessedCorrectData = false;
+                str->inStr.runCnt = eRecept_begin;
+            }
+            break;
     }
 }
 
- 
+
 //*****************************************************************************
 /**
 * История изменений: 
@@ -317,8 +342,16 @@ void receptionRun( BlockExch_Str *str )
 *     Базовая версия.
 * 
 * Версия 1.0.2
-* Дата 10-10-2019  
+* Дата   10-10-2019  
+* Автор  Кругликов В.П.
+* 
 * Изменения: 
-* Изменён сценарий сихронизации и последующая обработка контрольной суммы межблочного обмена 
- 
- */
+*   Изменён сценарий сихронизации и последующая обработка контрольной суммы межблочного обмена 
+* 
+* Версия 1.0.3
+* Дата   9-04-2021
+* Автор  Кругликов В.П.
+* 
+* Изменения: 
+*   Изменён автомат состояний функции receptionRun
+*/

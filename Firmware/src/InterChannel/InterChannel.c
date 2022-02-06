@@ -1,10 +1,10 @@
 /**
-* \file
+* \file    InterChannel.c
 * \brief   \copybrief InterChannel.h
-* 
-* \version 1.0.13
-* \date    13-09-2019
-* \author  Годунок А.Н.
+*
+* \version 1.0.15
+* \date    04-02-2021
+* \author  Третьяков В.Ж.
 */
 
 //*****************************************************************************
@@ -22,7 +22,7 @@
 #include "DefCompil.h"
 
 //*****************************************************************************
-// Макрос типа функция
+// Макросы типа функция
 //*****************************************************************************
 
 //*****************************************************************************
@@ -48,10 +48,8 @@
 #define MAX( a,b ) ( ( ( a )>( b ) )?( a ):( b ) )  
 
 //*****************************************************************************
-// Макроопределения, управляющие компиляцией
-//*****************************************************************************
-
-// Проверка корректного включения трассировки
+/// \brief Проверка корректного включения трассировки.  
+///
 #ifdef INTERCHANNEL_INTERCHANNEL_DEBUG_MODE
     #if ( INTERCHANNEL_INTERCHANNEL_DEBUG_MODE == INTERCHANNEL_INTERCHANNEL_DEBUG_MODE_ON  )  
 
@@ -68,15 +66,18 @@
 #endif
 
 //*****************************************************************************
-// Макросы типа функция
-//*****************************************************************************
-
-//*****************************************************************************
 /// \brief Флаги состояния синхронизации.
 /// \note Макрос формирует маску флага по его значению, описанному в 
 /// причисляемом типе \a SignalFlags.
 ///
 #define FLAG_MASK( flag ) (uint16_t)( 1 << (flag) )
+
+//*****************************************************************************
+/// \brief Перевод физической величины в проценты.
+/// \param range_ – величина, соответствующая 100%;
+/// \param val_   – переводимое значение.
+///
+#define valToPercent( range_, val_ ) ((100 * (val_)) / (range_))
 
 //*****************************************************************************
 /// \brief Перевод процентов в физическую величину.
@@ -86,11 +87,7 @@
 #define percentToVal( range_, per_ ) ( ( ( range_ ) * ( per_ ) ) / 100 )
 
 //*****************************************************************************
-// Макроопределения, управляющие компиляцией
-//*****************************************************************************
-
-//*****************************************************************************
-/// \brief \hideinitializer Инициализация счетчика контрольного времени.
+/// \brief Инициализация счетчика контрольного времени.
 /// \param id_ – идентификатор параметра, для которого запускается
 /// счетчик;
 /// \param conTime_ – идентификатор запускаемого счетчика 
@@ -107,7 +104,7 @@
 } while( 0 )
 
 //*****************************************************************************
-/// \brief \hideinitializer Запуск счетчика контрольного времени.
+/// \brief Запуск счетчика контрольного времени.
 /// \param id_ – идентификатор параметра, для которого запускается
 /// счетчик;
 /// \param time_ – идентификатор счетчика, одно из значений 
@@ -154,7 +151,7 @@
            InterChannel_startTime( id_, eInterChannelConTime3 ) 
 
 //*****************************************************************************
-/// \brief \hideinitializer Запуск счетчиков контрольного времени Т1 и Т3.
+/// \brief Запуск счетчиков контрольного времени Т1 и Т3.
 /// \param id_ – идентификатор параметра, для которого запускается
 /// счетчик.
 /// \note Счетчики Т1 и Т3 запускаются одновременно при получении запроса 
@@ -188,6 +185,15 @@
 ///
 #define InterChannel_stopTime2( id_ )                                        \
     Set64_remove( &interChannelData.timing[eInterChannelConTime2].timeSet64, \
+                  ( id_ ) )
+
+//*****************************************************************************
+/// \brief Остановка счетчика контрольного времени Т3.
+/// \param id_ – идентификатор параметра, для которого запускается
+/// счетчик.
+///
+#define InterChannel_stopTime3( id_ )                                        \
+    Set64_remove( &interChannelData.timing[eInterChannelConTime3].timeSet64, \
                   ( id_ ) )
 
 //*****************************************************************************
@@ -225,6 +231,17 @@
 ///
 #define InterChannel_stopTimeForAllId( conTime_ )                            \
     Set64_clear(&interChannelData.timing[ ( conTime_ ) ].timeSet64)
+
+//*****************************************************************************
+/// \brief Выполнить выражение в критической секции, защищающей блок от 
+/// прерываний таймера для работы с CAN.
+///
+#define ATOMIC_SYS( x ) do     \
+{                              \
+    sysLock();                 \
+    x;                         \
+    sysUnLock();               \
+} while( 0 )
 
 //*****************************************************************************
 /// \brief Установка события синхронизации.
@@ -269,7 +286,7 @@
 #define REMODE_DATA_STORAGE_SIZE    10
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -334,6 +351,8 @@ typedef struct
     param_t  m_localValue;                        ///< Значение параметра своего канала.
     param_t  m_remoteValue;                       ///< Значение параметра соседнего канала.
     param_t  m_operatingValue;                    ///< Значение параметра после сравнения.
+    param_t  m_lastTranslateValue; // tret 04.02.2021 ///< Последнее переданное значение параметра.
+                                 
 } InterChannelParamState;
 
 //*****************************************************************************
@@ -382,11 +401,11 @@ typedef struct
 ///
 typedef struct
 {
-    /// \brief Массив состояний, каждого синхронизируемого параметра.
+    /// \brief Массив состояний каждого синхронизируемого параметра.
     ///
     InterChannelParamDump paramDump[eInterChannelIdCount];
 
-    /// \brief Структура, управляющая счетчиками контроля временных характеристик.
+    /// \brief Структура управляющая счетчиками контроля временных характеристик.
     /// Описание контролируемых временных параметров смотри в описании 
     /// типа #InterChannelControlledTime.
     ///
@@ -396,7 +415,7 @@ typedef struct
 
     Set64_t               updateSet64;         ///< Список данных, нуждающихся в обновлении.
 
-    const ArrayIoDriver * drvPtr;              ///< Указатель на данные драйвера канала связи.
+    const ArrayIoDriver *drvPtr;               ///< Указатель на данные драйвера канала связи.
 
     InterChannelTmp       tmp;                 ///< Вспомогательные данные для работы #InterChannel_runCommunication.
 
@@ -572,18 +591,16 @@ void InterChannel_synchChangeValue( id_t id )
             )
           == ( FLAG_MASK( eLocal ) | FLAG_MASK( eLocalAck ) )
           )
-        || // Если только удаленный, синхронизация так же выполнена
+        || // Если удаленный, синхронизация так же выполнена
+        // corr 04.02.21 Третьяков 
         ( ( interChannelData.paramDump[id].m_state.m_flags
-            //& FLAG_MASK(eRemote)
-            )
-          == FLAG_MASK( eRemote )
-          )
-        )
+            &  FLAG_MASK( eRemote ) )
+          ==  FLAG_MASK( eRemote )  )
+      )      
     {
         // Устанавливаем признак необходимости обновить данные
         Set64_insert( &interChannelData.updateSet64, id );
     }
-
     //ggggg 
 #ifdef INTERCHANNEL_DEBUG_MODE
     #if ( INTERCHANNEL_DEBUG_MODE == INTERCHANNEL_DEBUG_MODE_ON  ) 
@@ -761,6 +778,7 @@ bool InterChannel_verification( id_t id )
                 if( max > 0 && ( max - min > 0 ) )
                 {
                     // При целочисленных вычислениях такой способ дает больше точность
+                    // min = valToPercent( max, min );
                     min = __builtin_divud( __builtin_muluu( 100, min ), max );
                     result = ( ( 100 - ( param_t )min )
                                <= interChannelData.paramDump[id].m_settings.m_paramCheck ) ? true : false;
@@ -779,6 +797,7 @@ bool InterChannel_verification( id_t id )
                 if( max - min > 0 )
                 {
                     // При целочисленных вычислениях такой способ дает больше точность
+                    // min = valToPercent( interChannelData.paramDump[id].m_settings.m_middleRangeCheck, max - min );
                     min = __builtin_divud( __builtin_muluu( 100, max - min ), interChannelData.paramDump[id].m_settings.m_middleRangeCheck );
                     result = ( min
                                <= interChannelData.paramDump[id].m_settings.m_paramCheck ) ? true : false;
@@ -827,15 +846,15 @@ void InterChannel_synchValue( id_t id )
         case eProcSyncHi:
         { // выбор большего значения;
             interChannelData.paramDump[id].m_state.m_operatingValue = MAX(
-                                                                           interChannelData.paramDump[id].m_state.m_localValue,
-                                                                           interChannelData.paramDump[id].m_state.m_remoteValue );
+                        interChannelData.paramDump[id].m_state.m_localValue,
+                        interChannelData.paramDump[id].m_state.m_remoteValue );
             break;
         }
         case eProcSyncLo:
         {// выбор меньшего значения;
             interChannelData.paramDump[id].m_state.m_operatingValue = MIN(
-                                                                           interChannelData.paramDump[id].m_state.m_localValue,
-                                                                           interChannelData.paramDump[id].m_state.m_remoteValue );
+                        interChannelData.paramDump[id].m_state.m_localValue,
+                        interChannelData.paramDump[id].m_state.m_remoteValue );
             break;
         }
         case eProcSyncAverage:
@@ -875,8 +894,7 @@ void InterChannel_synchValue( id_t id )
                           id, 0, interChannelData.paramDump[id].m_settings.m_procSync, 0 );
             break;
     }
-
-    InterChannel_setSyncEvent( id );
+    // tret 4.02.2021 InterChannel_setSyncEvent( id );
 }
 
 //*****************************************************************************
@@ -910,63 +928,82 @@ void InterChannel_updateData( id_t id )
         // Проверка флагов статуса
         switch( interChannelData.paramDump[id].m_settings.m_script )
         {
+            bool resultVerification;
             case eScriptChVal:
-            {
+            {  // tret 04.02.2021 Третьяков Переписана ветка полностью
+                
+                param_t localValueTemp = interChannelData.paramDump[id].m_state.m_localValue;
+                interChannelData.paramDump[id].m_state.m_localValue = 
+                interChannelData.paramDump[id].m_state.m_lastTranslateValue; 
+                resultVerification = InterChannel_verification( id );
+                interChannelData.paramDump[id].m_state.m_localValue = localValueTemp;
 
-                // Разрешение коллизии изменение 2 для версии 1.0.3
-
-                uint16_t flags;
-                bool isCollision;
-
-                flags = ( interChannelData.paramDump[id].m_state.m_flags
-                          & ( FLAG_MASK( eLocal )
-                              | FLAG_MASK( eLocalAck )
-                              | FLAG_MASK( eRemote ) )
-                          );
-
-                isCollision = false;
-
-                // Проверка флагов статуса
-                switch( flags )
+                if( resultVerification )
                 {
-                        // Разрешенные комбинации
-                    case ( FLAG_MASK( eLocal )
-                           | FLAG_MASK( eLocalAck )
-                           | FLAG_MASK( eRemote ) ):
-                    case ( FLAG_MASK( eLocal ) | FLAG_MASK( eLocalAck ) ):
-                    case FLAG_MASK( eRemote ):
-                        break;
-                        // Коллизии
-                    case ( FLAG_MASK( eLocal ) | FLAG_MASK( eRemote ) ):
-                        isCollision = true;
-                        break;
-                    default:
-                        ERROR_EX_ID( eGrPS_InterChannel, ePS_IntChCollision,
-                                      id,
-                                      interChannelData.paramDump[id].m_state.m_flags,
-                                      interChannelData.paramDump[id].m_settings.m_script,
-                                      0 );
-                        break;
-                }
 
-                if( isCollision )
+                    InterChannel_synchValue( id );
+
+                    // Если верификация прошла успешно отключаем счетчик отказа
+                    InterChannel_stopTime2( id );
+
+                    //ggggg   
+#if ( INTERCHANNEL_DEBUG_MODE == INTERCHANNEL_DEBUG_MODE_ON )  
+                    if( id == INTERCHANNEL_DEBUG_TRACING_PARAM )
+                    {
+                        Tracing_parameterId( id, 0xF6, INTERCHANNEL_DEBUG_TRACING_ARRAY ); //ggggg
+                        Tracing_parameter( interChannelData.paramDump[id].m_state.m_operatingValue, INTERCHANNEL_DEBUG_TRACING_ARRAY ); //ggggg
+                        Tracing_parameter( Main_getTimeWorkMs(), INTERCHANNEL_DEBUG_TRACING_ARRAY ); //ggggg
+                    }
+#endif
+                    //ggggg 
+                }
+                else
                 {
-                    // Очищаем флаг eRemote
-                    interChannelData.paramDump[id].m_state.m_flags
-                            &= ~FLAG_MASK( eRemote );
-                    break;
+                    // Если счетчик не запущен, запускаем его
+                    if( InterChannel_time2IsRunning( id ) )
+                    {
+                        InterChannel_startTime2( id );
+                    }
+                    //ggggg   
+#if ( INTERCHANNEL_DEBUG_MODE == INTERCHANNEL_DEBUG_MODE_ON )  
+                    if( id == INTERCHANNEL_DEBUG_TRACING_PARAM )
+                    {
+                        Tracing_parameterId( id, 0xF7, INTERCHANNEL_DEBUG_TRACING_ARRAY ); //ggggg
+                        Tracing_parameter( interChannelData.paramDump[id].m_state.m_operatingValue, INTERCHANNEL_DEBUG_TRACING_ARRAY ); //ggggg
+                        Tracing_parameter( Main_getTimeWorkMs(), INTERCHANNEL_DEBUG_TRACING_ARRAY ); //ggggg
+                    }
+#endif
+                    //ggggg 
                 }
+                
+                // Очищаем флаги процесса обработки сигнала
+                if ( interChannelData.paramDump[id].m_state.m_flags &     FLAG_MASK( eRemote ) ) 
+                     interChannelData.paramDump[id].m_state.m_flags &= ~( FLAG_MASK( eRemote ) );
+                     
+                if ( ( interChannelData.paramDump[id].m_state.m_flags & 
+                       ( FLAG_MASK( eLocal ) | FLAG_MASK( eLocalAck ) ) ) == 
+                       ( FLAG_MASK( eLocal ) | FLAG_MASK( eLocalAck ) ) ) 
+                    interChannelData.paramDump[id].m_state.m_flags &=
+                      ~( FLAG_MASK( eLocal ) | FLAG_MASK( eLocalAck ) );
 
-                // Дальнейшая обработка выполняется так же как и для 
-                // сценария синхронизации  
+                if ( resultVerification )
+                {
+                    if (  interChannelData.paramDump[( id )].m_state.m_flags &  FLAG_MASK( eSyncEvent ) )  
+                          interChannelData.paramDump[( id )].m_state.m_flags |= FLAG_MASK( eSyncEventOverflow );
+                    interChannelData.paramDump[( id )].m_state.m_flags |=   
+                        ( FLAG_MASK( eSynchronized ) | FLAG_MASK( eSyncEvent ) );
+                }
+                break;
             }
+
             case eScriptSync:
             {
                 if( InterChannel_verification( id ) )
                 {
 
                     InterChannel_synchValue( id );
-
+                    InterChannel_setSyncEvent( id ); // tret 4.02.2021
+                    
                     // Если верификация прошла успешно отключаем счетчик отказа
                     InterChannel_stopTime2( id );
 
@@ -1161,7 +1198,9 @@ void InterChannel_setLocalAck( id_t id )
 
     // Установка флага приема параметра от соседнего канала eLocalAck
     interChannelData.paramDump[id].m_state.m_flags |= FLAG_MASK( eLocalAck );
-
+    
+    interChannelData.paramDump[id].m_state.m_lastTranslateValue = // tret 04.02.2021
+    interChannelData.paramDump[id].m_state.m_localValue; 
     //ggggg   
 #if ( INTERCHANNEL_DEBUG_MODE == INTERCHANNEL_DEBUG_MODE_ON )  
     if( id == INTERCHANNEL_DEBUG_TRACING_PARAM )
@@ -1183,7 +1222,7 @@ void InterChannel_setLocalAck( id_t id )
 
 //*****************************************************************************
 // Инициализация переменных компонента
-void InterChannel_ctor( const ArrayIoDriver * drvPtr )
+void InterChannel_ctor( const ArrayIoDriver *drvPtr )
 {
     int i;
 
@@ -1455,7 +1494,7 @@ param_t InterChannel_getLocalData( id_t id )
 
 //*****************************************************************************
 // Установка значения параметра в физическом протоколе
-void InterChannel_setCommunicationData( uint8_t * buf, int size, int commPos, id_t id, param_t data )
+void InterChannel_setCommunicationData( uint8_t *buf, int size, int commPos, id_t id, param_t data )
 {
     ASSERT_EX_ID( eGrPS_InterChannel, ePS_IntChInputDriverGetError, size >= 6,
                    12, size, sizeof(buf ), 0 );
@@ -1482,7 +1521,7 @@ void InterChannel_setCommunicationData( uint8_t * buf, int size, int commPos, id
 
 //*****************************************************************************
 // Получает значение параметра в физическом протоколе.
-void InterChannel_getCommunicationData( uint8_t * buf, int size, int commPos, id_t * id, param_t * data )
+void InterChannel_getCommunicationData( uint8_t *buf, int size, int commPos, id_t *id, param_t *data )
 {
     ASSERT_EX_ID( eGrPS_InterChannel, ePS_IntChInputDriverGetError, size >= 6,
                    3, size, sizeof(buf ), 0 );
@@ -1517,7 +1556,7 @@ void InterChannel_runCommunication( bool transmitIsEnabled )
     uint16_t i;
 
     static uint16_t bufWord[REMODE_DATA_BLOCK_SIZE / sizeof(uint16_t) ];
-    uint8_t * bufChar = (uint8_t *)bufWord;
+    uint8_t *bufChar = (uint8_t *)bufWord;
 
     DASSERT_EX_ID( eGrPS_InterChannel, ePS_IntChIoDriverError, drv != 0,
                     2, 2, 0, 0 );
@@ -1658,31 +1697,28 @@ void InterChannel_run( void )
     // хранилищ в буфер.
     // Данная секция кода должна быть защищена от прерывания в работе 
     // функцией InterChannel_runCommunication
-    //
 
     sysLock();
 
     // Извлечение из хранилища данных полученных от соседнего канала           
     memcpy( bufRemoteData, interChannelStorageRemoteData.items,
-            REMODE_DATA_BLOCK_SIZE * interChannelStorageRemoteData.count );
+            REMODE_DATA_BLOCK_SIZE *interChannelStorageRemoteData.count );
     countRemoteData = interChannelStorageRemoteData.count;
     interChannelStorageRemoteData.count = 0;
 
     // Извлечение из хранилища идентификаторов сообщений, на которые были 
     // получены подтверждения
     memcpy( bufAck, interChannelStorageAck.items,
-            sizeof(id_t ) * interChannelStorageAck.count );
+            sizeof(id_t ) *interChannelStorageAck.count );
     countAck = interChannelStorageAck.count;
     interChannelStorageAck.count = 0;
 
     sysUnLock();
 
-    //
     //--------------------------------------------------------------------------
 
     //--------------------------------------------------------------------------
     // Обработка данных, собранных между вызовами InterChannel_run
-    //
 
     // Обработка данных, полученных от соседнего канала               
     for( i = 0; i < countRemoteData; ++i )
@@ -1705,12 +1741,11 @@ void InterChannel_run( void )
 
     // Обработка идентификаторов сообщений, на которые были 
     // получены подтверждения
-    //
     for( i = 0; i < countAck; ++i )
     {
         InterChannel_setLocalAck( bufAck[i] );
     }
-    //
+    
     //--------------------------------------------------------------------------
 
     ++mainTime;
@@ -1735,8 +1770,8 @@ void InterChannel_run( void )
         Set64_findMax( &interChannelData.updateSet64, id );
     }
 
-    // Контроль времен  
-    for( i = 0; i < ( eInterChannelConTimeCount ); i++ )
+    // Контроль времен (без Т3) 
+    for( i = 0; i < ( eInterChannelConTimeCount - 1 ); i++ )
     { 
         InterChannel_checkTime( i );
     }
@@ -1903,7 +1938,7 @@ void InterChannel_run( void )
 * Проблема: 
 *     Выполнение кода не вмещается в цикл 1 мс.
 * Изменения:
-*     1) макрос valToPercent удалён и заменен на __builtin_divud( __builtin_muluu(..., ...), ...);
+*     1) valToPercent заменен на __builtin_divud( __builtin_muluu(..., ...), ...);
 *
 * Версия 1.0.10
 * Дата   23-05-2019
@@ -1931,14 +1966,14 @@ void InterChannel_run( void )
 *    процедуры контроля eProcCheckEqual. Для предотвращения этого в функцию InterChannel_setParamSettings 
 *    добавлен контроль того, что при использовании процедуры синхронизации eProcSyncEqual процедура контроля
 *    указана eProcCheckEqual. В случае невыполнения этого условия пробор будет переведен в ЗС.
-*    8) Добавлены макроопределения InterChannel_stopTime1, InterChannel_stopTime2, 
+*    8) Добавлены макроопределения InterChannel_stopTime1, InterChannel_stopTime2, InterChannel_stopTime3, 
 *    InterChannel_time1IsRunning, InterChannel_time2IsRunning, InterChannel_time3IsRunning 
 *    и InterChannel_stopTimeForAllId.
 *    9) Из-за изменений в структуре драйверов ArrayIoDriver изменен прототип функции 
-*    InterChannel_runCommunication( const ArrayIoDriver * drv ) на InterChannel_runCommunication( void ),
+*    InterChannel_runCommunication( const ArrayIoDriver *drv ) на InterChannel_runCommunication( void ),
 *    поскольку теперь таблица функций и данные объединены в одной структуре.
-*    Тек же изменен прототип функции void InterChannel_ctor( const void * drvPtr ) на 
-*    void InterChannel_ctor( const ArrayIoDriver * drvPtr ), а у поля drvPtr структуры InterChannelData
+*    Также изменен прототип функции void InterChannel_ctor( const void *drvPtr ) на 
+*    void InterChannel_ctor( const ArrayIoDriver *drvPtr ), а у поля drvPtr структуры InterChannelData
 *    заменен тип с const void * на const ArrayIoDriver *.
 *
 * Версия 1.0.11
@@ -1963,7 +1998,7 @@ void InterChannel_run( void )
 *        - в функцию InterChannel_runCommunication добавлен параметр transmitIsEnabled, который 
 *    разрешает или запрещает выдачу данных на шину CAN.
 * 
-* * Версия 1.0.12
+* Версия 1.0.12
 * Дата   23-08-2019
 * Автор  Третьяков В.Ж. 
 *
@@ -1997,4 +2032,27 @@ void InterChannel_run( void )
 *    проконтролировать, что не было пропущенных данных. Данный признак взведется, 
 *    если произойдет несколько событий после последнего обращения пользовательского
 *    ПО к функции InterChannel_syncEvent. При чтении данный признак сбрасывается.
+* 
+* 
+* Версия 1.0.14
+* Дата   21-01-2021
+* Автор  Третьяков В. Ж. 
+*
+* Проблема: 
+*    1) При выполнении сценария eScriptChVal в функции InterChannel_synchChangeValue
+*       проводился анализ наличия только удаленного запроса путем сравнения поля флагов с 
+*       константой. В версии 1.0.13 поле флагов было расширено, и это сравнение перестало работать.
+* Изменения:
+*    На поле флагов наложена маска, и после этого проводится сравнение. 
+* 
+* Версия 1.0.15
+* Дата   04-02-2021
+* Автор  Третьяков В.Ж.
+*
+* Проблема: 
+*       При выполнении сценария eScriptChVal возникал переход в ЗС.
+*      Связано с ошибкой алгоритма этого сценария.
+* Изменения: изменен алгоритм.
+* Подробно описано в документе "Описание изменений InterChannel версии 1.0.15"    
+* 
 */

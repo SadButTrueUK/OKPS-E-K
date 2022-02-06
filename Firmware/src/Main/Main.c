@@ -27,8 +27,7 @@
 #include "DeviceAddress.h"
 #include "BinIn.h"
 #include "checkCauseReset.h"
-#include "EcanAck_driverPIC33.h"
-#include "Ecan_driverPIC33.h"
+#include "EcanDriver.h"
 #include "CheckSupply.h"
 #include "Eeprom.h"
 #include "ModeProtection.h"
@@ -42,10 +41,13 @@
 #include "FlashCheck.h"
 #include "IdentHex.h"
 #include "ControlMK.h"
+#include "ManageCanDriver.h"
+#include "MessageVersion.h"
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
+
 //*****************************************************************************
 Rs422_handler             *rs422;                  ///< Указатель на переменную состояния модуля Rs422.h.
 BlockExch_Str             *blockExchange;          ///< Указатель на переменную состояния модуля BlockExch.h.
@@ -59,17 +61,17 @@ indOutput_type            ledRs1,                  ///< Индикатор RS1.
                           ledLossCtrl;             ///< Индикатор "Потеря контроля".
 
 //*****************************************************************************
-volatile uint16_t cInterrMainFor;           ///< Счетчик прерываний синхронизации.
-volatile uint16_t cErrorCheckPhase;         ///< Счетчик отказов по уровню временной синхронизации.
-static volatile uint16_t cSec;                     ///< Время работы (не более #MAX_TIME_FIX_SEC), сек.
-static volatile uint16_t cMs;                      ///< Время работы (не более 1000), в мс.
+volatile uint16_t cInterrMainFor;       ///< Счетчик прерываний синхронизации.
+volatile uint16_t cErrorCheckPhase;     ///< Счетчик отказов по уровню временной синхронизации.
+static volatile uint16_t cSec;          ///< Время работы (не более #MAX_TIME_FIX_SEC), с.
+static volatile uint16_t cMs;           ///< Время работы (не более 1000), в мс.
 
 //*****************************************************************************
 uint16_t regDSWPAG;          ///< Состояние регистра \a DSWPAG.
 uint16_t regDSRPAG;          ///< Состояние регистра \a DSRPAG.
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************
@@ -82,10 +84,6 @@ const uint16_t MAIN_NUMBER_OF_INTERRUPT = 16;
 ///
 static const uint16_t MAX_TIME_FIX_SEC = 0x8000;
 
-//******************************************************************************
-/// \brief Функции драйвера \a CAN для МКО.
-///
-const ArrayIoDriverEx mainCanDrvFunc = EcanAck_staticFunc( );
 
 //*****************************************************************************
 // Прототипы локальных функций
@@ -157,6 +155,26 @@ uint16_t Main_getTimeWorkInterrupt( void )
 }
 
 //*****************************************************************************
+// Получить длительность основного цикла, мкс.
+uint16_t Main_getPeriodCycle()
+{
+    return PERIOD_MAIN_CYCLE;
+}
+
+//*****************************************************************************
+// Получить текущее время работы главного цикла, мкс.
+uint16_t Main_getCurrentTimeCycle()
+{
+    uint16_t data1, data2;
+    // количество прерываний
+    data1 = __builtin_divud( __builtin_muluu( cInterrMainFor, TIME_PERIOD_INTERRUPT_NS ), 1000 );
+    // время в прерывании
+    data2 = __builtin_divud( __builtin_muluu( MAIN_TIMER, TIME_PERIOD_INTERRUPT_NS / 1000 ), MAIN_TIMER_LOAD_PR5 );
+
+    return data1 + data2;; 
+}
+
+//*****************************************************************************
 // Реализация локальных функций
 
 //*****************************************************************************
@@ -222,10 +240,11 @@ int main( void )
     checkCauseReset_run( );
     ConfigMK_ctor( );
     Tracing_ctor( );
+    
     if( ConfigMK_isMaster( ) )
     {
-        InterChannel_ctor( EcanAck_ctor( Ecan_ctor( eEcan1, ADDRESS_CAN_CHANNEL_SLAVE,
-                                                    ADDRESS_CAN_CHANNEL_MASTER, eNormalMode, 6 ) ) );
+        InterChannel_ctor( ManageCanDriver_ctor( eEcan1, ADDRESS_CAN_CHANNEL_SLAVE,
+                                                    ADDRESS_CAN_CHANNEL_MASTER,  eEcanModeNormal, 6 )  );
         Indication_ctorLed( &ledRs1, &TRISG, &LATG, 13, eCtrEnLow );
         Indication_ctorLed( &ledRs2, &TRISG, &LATG, 12, eCtrEnLow );
         Indication_ctorLed( &ledPlusPos, &TRISG, &LATG, 14, eCtrEnLow );
@@ -234,8 +253,8 @@ int main( void )
     }
     else
     {
-        InterChannel_ctor( EcanAck_ctor( Ecan_ctor( eEcan1, ADDRESS_CAN_CHANNEL_MASTER,
-                                                    ADDRESS_CAN_CHANNEL_SLAVE, eNormalMode, 6 ) ) );
+        InterChannel_ctor( ManageCanDriver_ctor( eEcan1, ADDRESS_CAN_CHANNEL_MASTER,
+                                                    ADDRESS_CAN_CHANNEL_SLAVE,  eEcanModeNormal, 6 )  );
         Indication_ctorDummy( &ledRs1 );
         Indication_ctorDummy( &ledRs2 );
         Indication_ctorDummy( &ledPlusPos );
@@ -243,9 +262,10 @@ int main( void )
         Indication_ctorDummy( &ledMinusPos );
     }
     Eeprom_ctor( ); // 1 раз для обеспечения возможности записи кодов отказов 
-    DebugTools_ctor( );
+    DeviceAddress_ctor( );
     ModeProtection_ClearPS();  //сброс ЗС, если оно установлено 
     IdentHex_run( );
+    DebugTools_ctor( );
 #ifndef IGNORE_CHECK_PROTECTION_STATE
     // Анализ наличия кода ЗС в EEPROM
     uint16_t firstCell = Eeprom_read( ADDRESS_EEPROM_PROTECTION_CODE_1 ); 
@@ -270,7 +290,7 @@ int main( void )
     ModeProtection_ctor( );
     BinIn_ctor( );
     CheckSupply_ctor( );
-    DeviceAddress_ctor( );
+    MessageVersion_ctor();
     SafetyPowerControl_ctor( );
     LedFailure_ctor( );
     AnalogMeasurement_ctor( ); 
@@ -281,7 +301,7 @@ int main( void )
     CAN_TIMER_INIT;
     MAIN_TIMER_INIT_AND_START;
     INTERRUPT_INIT;
-
+   
     while( true )
     {
         cInterrMainFor = 0;
@@ -332,7 +352,6 @@ int main( void )
 * формируется признак разрешения передачи, если до начала следующего цикла главного потока 
 * осталось времени больше чем значение INTER_CH_RESTRICTION_ON_TRANSFER;
 *    - удалена передача параметра eInterChannelTrPhaseEven в функцию InterChannel_ctor.
-*
 *  
 * Версия 2.0.4
 * Дата   24-10-2019
@@ -341,12 +360,10 @@ int main( void )
 * Изменения:
 *   Изменена настройка системы тактирования микроконтроллера
 * 
-*
-* Версия 2.0.5. 
+* Версия 2.0.5
 * Дата 14-05-2020 
 * Автор Кругликов В.П.
 * 
 * Изменения:
-*   Обработчики прерываний удалены из main.c и вынесены в InterruptsHandlers.c  
-*
+*   Обработчики прерываний удалены из Main.c и вынесены в InterruptsHandlers.c  
 */

@@ -37,7 +37,6 @@
 ///
 #define ADDRESS_EEPROM_TIME_TMR          0x003C
 
-//#define ADDRESS_EEPROM_CONTROL_TOTAL_FLASH_1 0x003E    ///< Адрес 1-ой ячейки \a EEPROM с контрольной суммой прошивки.
 
 #define ADDRESS_EEPROM_PROTECTION_STATE_ADD_CODE 0x0040    ///< Адрес массива \a EEPROM с уточняющей информацией для ЗОт.
 
@@ -45,14 +44,26 @@
 /// \brief Начальный адрес структуры трассировки: адрес, количество массивов, размер массива.
 ///
 #define ADDRESS_EEPROM_STRUCT_TRACING            0x0070
+#define ADDRESS_EEPROM_TRACING_START             0x0080    ///< Начальный адрес буферов трассировки.
 
 //*****************************************************************************
-//#define ADDRESS_EEPROM_TRACING                   0x0140    ///< Начальный адрес массивов трассировки.
-#define ADDRESS_EEPROM_TRACING_START                   0x0080    ///< Начальный адрес буферов трассировки.
+/// \brief Данные калибровки прибора
+///
+#define ADDRESS_EEPROM_CALIBR_ADDR                   0x0E90   ///< Адрес прибора при последнем включении
+#define ADDRESS_EEPROM_CALIBR_CONF                   0x0E92   ///< Конфигурация прибора при последнем включении
+#define ADDRESS_EEPROM_CALIBR_CRC                    0x0E94   ///< СRC при последней при последнем включении
+#define ADDRESS_EEPROM_MAGIC_WORD                    0x0E96   ///< Признак записи заводского номера
+#define ADDRESS_EEPROM_CALIBR_THRESHOLD_P            0x0E98   ///< Калибровочное значение тока при переводе в плюс
+#define ADDRESS_EEPROM_CALIBR_THRESHOLD_M            0x0E9A   ///< Калибровочное значение тока при переводе в минус
+#define ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_P 0x0E9C   ///< Калибровочное значение увеличенного времени перевода в пдюс
+#define ADDRESS_EEPROM_CALIBR_INCREASED_TIME_SHIFT_M 0x0E9E   ///< Калибровочное значение увеличенного времени перевода в пдюс
+#define  ADDRESS_EEPROM_MANUFACTURERS_NUMBER         0x0EA0
+
+
+//*****************************************************************************
 #define ADDRESS_EEPROM_PROTECTION_CODE_2         0x0FF0    ///< Адрес 2-ой ячейки \a EEPROM с кодом ЗОт.
 #define ADDRESS_EEPROM_PROTECTION_CODE_3         0x0FF2    ///< Адрес 3-ей ячейки \a EEPROM с кодом ЗОт.
-//#define ADDRESS_EEPROM_CONTROL_TOTAL_FLASH_2    0x0FF4    ///< Адрес 2-ой ячейки \a EEPROM с контрольной суммой прошивки.
-//#define ADDRESS_EEPROM_CONTROL_TOTAL_FLASH_3    0x0FF6    ///< Адрес 3-ой ячейки \a EEPROM с контрольной суммой прошивки.
+
 
 #endif
 

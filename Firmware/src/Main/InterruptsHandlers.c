@@ -2,9 +2,9 @@
 * \file    InterruptsHandlers.c
 * \brief   Обработка прерываний.
 *
-* \version 1.0.0
-* \date    14-05-2020
-* \author  Кругликов В.П.
+* \version 1.0.2
+* \date    15-03-2021
+* \author  Агулов М.А.
 */
 
 //*****************************************************************************
@@ -25,7 +25,7 @@
 #include "Main.h"
 #include "typeMK.h"
 #include "CheckRAM.h"
-
+#include "Adc.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -39,20 +39,19 @@
 /// цикла осталось времени меньше чем на передачу двух сообщений.
 /// \details Время задается в количестве прерываний потока синхронизации по времени. 
 /// \note При выбранной скорости передачи данных время передачи пакета составляет
-/// 115 мкс. Что при частоте синхронизации 16кГц составляет два прерывания.
+/// 115 мкс. Что при частоте синхронизации 16 кГц составляет два прерывания.
 /// Два пакета передаются – на протяжении времени равным четырем прерываниям.
 ///
 #define INTER_CH_RESTRICTION_ON_TRANSFER 4
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************
 /// \brief Количество допустимых прерываний синхронизации при неправильной фазе сигнала.
 ///
 static const uint16_t NUMBER_OF_ERROR_PHASE = ( 4 * CASSERT_INC );
-
 
 //*****************************************************************************
 // Прототипы локальных функций
@@ -78,7 +77,6 @@ void ADC1_FUNCTION_INTERRUPT( void );
 ///
 void CN_FUNCTION_INTERRUPT( void );
 
-
 //*****************************************************************************
 // Обработка прерывания главного таймера
 void MAIN_TIMER_FUNCTION_INTERRUPT( void )
@@ -88,12 +86,12 @@ void MAIN_TIMER_FUNCTION_INTERRUPT( void )
     DSRPAG = regDSRPAG;
 
     if( CHECK_INTERRUPT_CN )
-    { // За период прерывания небыло синхронизации
+    { // За период прерывания не было синхронизации
         ERROR_ID( eGrPS_Main, ePS_MainCheckPeriodTimer );
     }
 
-    TIME_SYNCHRO_TOGGLE_LEVEL; // Вызов прерывания в соседнем МК по измен.уровня
-    ENABLE_INTERRUPT_CN; // Разрешение прерываний по измен.уровня 
+    TIME_SYNCHRO_TOGGLE_LEVEL;      // Вызов прерывания в соседнем МК по измен.уровня
+    ENABLE_INTERRUPT_CN;            // Разрешение прерываний по измен.уровня 
     MAIN_TIMER_INTERRUPT_CLEAR_FLAG;
 }
 
@@ -112,7 +110,7 @@ void CN_FUNCTION_INTERRUPT( void )
     if( cInterrMainFor == 15 )
         BinInDataRead_interrupt( );
     if( cInterrMainFor == 1 )
-        AnalogMeasurement_runInterrupt( );
+        Adc_run_interrupt();
     if( cInterrMainFor == 0 )
         BinInAddrSet_interrupt( );
     if( cInterrMainFor == 3 )
@@ -155,35 +153,25 @@ void CAN_TIMER_FUNCTION_INTERRUPT( void )
     DSRPAG = regDSRPAG;
 
     CAN_TIMER_STOP;
-    InterChannel_runCommunication( cInterrMainFor 
-                                   <= (   MAIN_NUMBER_OF_INTERRUPT 
-                                        - INTER_CH_RESTRICTION_ON_TRANSFER ) );
-
+    InterChannel_runCommunication( true );
     CAN_TIMER_INTERRUPT_CLEAR_FLAG;
-}
-
-//*****************************************************************************
-// Обработка прерывания АЦП1
-void ADC1_FUNCTION_INTERRUPT( void )
-{
-    MODCON = 0;
-    DSWPAG = regDSWPAG;
-    DSRPAG = regDSRPAG;
-
-    IFS0bits.AD1IF = 0;
-    AdcDriver_interruptAdc1( );
 }
 
 //*****************************************************************************
 /**
 * История изменений:
 *  
-* Версия 1.0.0
+* Версия 1.0.1
 * Дата   14-05-2020
 * Автор  Кругликов В.П.
 *
 * Изменения:
 *    Базовая версия.
 * 
+* Версия 1.0.2
+* Дата   15-03-2021
+* Автор  Агулов М.А.
+*
+* Изменения:
+*       Изменения в связи с настройкой АЦП для работы с DMA
 */
-

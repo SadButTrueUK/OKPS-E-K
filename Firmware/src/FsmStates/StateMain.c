@@ -13,7 +13,7 @@
 #include "Main.h"
 #include "ControlSystem.h"
 #include "States.h"
-#include "deviceAddress.h"
+#include "DeviceAddress.h"
 #include "relayCtrl.h"
 #include "positionDet.h"
 #include "ShuntShiftMotor.h"
@@ -21,9 +21,10 @@
 #include "OverloadDet.h"
 #include "IntegrCtrl.h"
 #include "IntegrCtrlGen.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
-// ќпределение локальных переменных
+// ќбъ€вление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -70,7 +71,6 @@ static void StateMain_onEntry( void )
 // ќбработка состо€ни€ основной работы
 static bool StateMain_onRun( void )
 {
-    Rs422_run( rs422 );
     BlockExch_run( blockExchange );
     ActiveManagerConnect_run( activityManager, blockExchange );
     ActivityManager_run( activityManager );
@@ -84,7 +84,7 @@ static bool StateMain_onRun( void )
 }
 
 //*****************************************************************************
-// ќпределение локальных типизированных констант
+// ќбъ€вление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************

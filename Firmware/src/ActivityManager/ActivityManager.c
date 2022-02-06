@@ -2,8 +2,8 @@
 * \file    ActivityManager.c
 * \brief   \copybrief ActivityManager.h
 * 
-* \version 1.0.1
-* \date    18-05-2017
+* \version 1.0.4
+* \date    12-12-2019
 * \author  Кругликов В.П.
 */
 
@@ -14,9 +14,11 @@
 #include "ActivityManager_dataTypes.h"
 #include "relayCtrl.h"
 #include "DebugTools.h"
+#include "CheckCallFunctions.h"
+#include "BlockExch.h"
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -24,7 +26,7 @@ static ActivityManager_DeviceStr deviceStr;        ///< Структура состояния моду
 static uint16_t timeoutChAct;                      ///< таймаут для смены активности по приказу от УС 
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -100,13 +102,20 @@ ActivityManager_DeviceStr *ActivityManager_ctor( bool status )
     str->ini = true;
     //Выключить модуль
     str->ctrl = false;
-    str->initIsActive = false; //инициализация прибора не заврешена
+    str->initIsActive = false; //инициализация прибора не завершена
     return str;
 }
 
+//Получить состояние инициализации менеджера активности своего прибора.
 bool ActivityManager_getInitDeviceState( ActivityManager_DeviceStr *str )
 {
     return str->initIsActive;
+}
+
+//Получить информацию о том. слышит сосед меня или нет.
+bool ActivityManager_isNeighborHearsMe( ActivityManager_DeviceStr *str )
+{
+    return str->inputData.str.neighborHearsMe;
 }
 
 // Смена активности по приказу от управляющей системы.
@@ -122,8 +131,7 @@ void ActivityManager_changeActivity( ActivityManager_DeviceStr *str, uint8_t val
 // Управление работой модуля
 void ActivityManager_run( ActivityManager_DeviceStr *str )
 {                                                                                              
-    
-	if( !str->ctrl || !str->ini ) return;
+    if( !str->ctrl || !str->ini ) return;
 
     // Декремент таймаутов
 #ifdef ENABLE_UNIFORM_LOAD_TIMER 
@@ -161,6 +169,7 @@ void ActivityManager_run( ActivityManager_DeviceStr *str )
             str->runCnt = transitionToPassive( str );
             break;
     }
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -233,11 +242,10 @@ void ActivityManager_setRS422connect( ActivityManager_DeviceStr *str, Rs422_numL
 }
 
 //*****************************************************************************
-// Установка состояния связи с УС по интерфейсу RS-422
-void ActivityManager_setRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line, bool connect )
+// Установка состояния положения стрелки своего прибора
+void ActivityManager_setOwnStatePosShift( ActivityManager_DeviceStr *str, uint8_t state )
 {
-    if( line == eRs422_line_1 ) str->rs422.str.ownLine1CtrlSystemConnect = connect;
-    else if( line == eRs422_line_2 ) str->rs422.str.ownLine2CtrlSystemConnect = connect;
+    str->inputData.str.ownStatePosShift = state;
 }
 
 //*****************************************************************************
@@ -245,15 +253,6 @@ void ActivityManager_setRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs4
 bool ActivityManager_isActive( ActivityManager_DeviceStr *str )
 {
     return str->outputData.str.activityState;
-}
-
-//*****************************************************************************
-// Получает состояние связи соседа с УС
-bool ActivityManager_getRS422neighborCtrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line )
-{
-    if( line == eRs422_line_1 ) return str->rs422.str.neighborLine1CtrlSystemConnect;
-    else if( line == eRs422_line_2 ) return str->rs422.str.neighborLine2CtrlSystemConnect;
-    else return false;
 }
 
 //*****************************************************************************
@@ -270,6 +269,16 @@ bool ActivityManager_isNeighborWorking( ActivityManager_DeviceStr *str )
     return str->inputData.str.neighborState;
 }
 
+//*****************************************************************************
+// Получает состояние связи соседа с УС
+bool ActivityManager_getRS422neighborCtrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line )
+{
+    if( line == eRs422_line_1 ) 
+        return str->rs422.str.neighborLine1CtrlSystemConnect;
+    if( line == eRs422_line_2 ) 
+        return str->rs422.str.neighborLine2CtrlSystemConnect;
+    return false;
+}
 //*****************************************************************************
 // Получает состояние связи с соседом
 bool ActivityManager_getNeighborConnection( ActivityManager_DeviceStr *str )
@@ -362,7 +371,7 @@ ActivityManager_States passiveProcessing( ActivityManager_DeviceStr *str )
                     return eRunTransitionToActive;
                 }
             }
-            //Если У соседа есть связь по RS-422
+            //Если у соседа есть связь по RS-422
             //Если Сосед пассивный
             if( str->inputData.str.neighborActivity == 0 )
             {
@@ -541,19 +550,39 @@ ActivityManager_States activeProcessing( ActivityManager_DeviceStr *str )
                     }
                     //Сосед активный и основной
                     //Попытка стать пассивным 2
-                    if( timeoutProcessing( &str->timeout ) )
+                    if ( BlockExch_getIsProcessedCorrectData( ) )    //30.03.21 Kruglikov
                     {
-                        //str->outputData.str.activityState = 0;  //06.08.19 Kruglikov
-                        str->transitionTimeCnt = T_O_REMAIN_PASSIVE;
-                    #ifdef ENABLE_UNIFORM_LOAD_TIMER    
-                        str->uniformLoadTimeCnt = 0;
-                    #endif    
-                        //return eRunPassiveState; //изменено КВП 18.06
-                        return eRunTransitionToPassive;
+                        if( timeoutProcessing( &str->timeout ) )  //!ddd
+                        {
+                            //str->outputData.str.activityState = 0;  //06.08.19 Kruglikov
+                            str->transitionTimeCnt = T_O_REMAIN_PASSIVE;
+                        #ifdef ENABLE_UNIFORM_LOAD_TIMER    
+                            str->uniformLoadTimeCnt = 0;
+                        #endif    
+                            //return eRunPassiveState; //изменено КВП 18.06
+                            return eRunTransitionToPassive;
+                        }
                     }
                 }
                 //У соседа есть связь по RS-422
                 //Попытка стать пассивным 2
+                if ( BlockExch_getIsProcessedCorrectData( ) )    //30.03.21 Kruglikov
+                {    
+                    if( timeoutProcessing( &str->timeout ) )
+                    {
+                        //str->outputData.str.activityState = 0; //06.08.19 Kruglikov
+                        str->transitionTimeCnt = T_O_REMAIN_PASSIVE;
+                    #ifdef ENABLE_UNIFORM_LOAD_TIMER    
+                        str->uniformLoadTimeCnt = 0;
+                    #endif    
+                        return eRunTransitionToPassive;
+                    }
+                }
+            }
+            //Сосед в рабочем состоянии
+            //Попытка стать пассивным 2
+            if ( BlockExch_getIsProcessedCorrectData( ) )    //30.03.21 Kruglikov
+            {
                 if( timeoutProcessing( &str->timeout ) )
                 {
                     //str->outputData.str.activityState = 0; //06.08.19 Kruglikov
@@ -563,17 +592,6 @@ ActivityManager_States activeProcessing( ActivityManager_DeviceStr *str )
                 #endif    
                     return eRunTransitionToPassive;
                 }
-            }
-            //Сосед в рабочем состоянии
-            //Попытка стать пассивным 2
-            if( timeoutProcessing( &str->timeout ) )
-            {
-                //str->outputData.str.activityState = 0; //06.08.19 Kruglikov
-                str->transitionTimeCnt = T_O_REMAIN_PASSIVE;
-            #ifdef ENABLE_UNIFORM_LOAD_TIMER    
-                str->uniformLoadTimeCnt = 0;
-            #endif    
-                return eRunTransitionToPassive;
             }
         }
         //Есть связь по RS-422
@@ -854,26 +872,32 @@ void timeoutReset( ActivityManager_TimeoutStr *str )
 * Версия 1.0.1
 * Дата   18-05-2017
 * Автор  Кругликов В.П.
+* 
 * Изменения:
-*     Базовая версия.
+*   Базовая версия.
 *
 * Версия 1.0.2  
-* Дата 8-08-2019
+* Дата   8-08-2019
 * Автор  Кругликов В.П.
+* 
 * Изменения:
-* Изменён алгоритм обработки неисправности контрольной цепи реле РПВ
+*   Изменён алгоритм обработки неисправности контрольной цепи реле РПВ
 * 
 * Версия 1.0.3  
-* Дата 2-12-2019
+* Дата   2-12-2019
 * Автор  Кругликов В.П.
+* 
 * Изменения:
-* Добавлена обработка приказа от управляющей системы по смене активности
+*   Добавлена обработка приказа от управляющей системы по смене активности
 *
 * Версия 1.0.4
-* Дата 12-12-2019 
-* Мзменена обработка пассивного состояния.
-* Причина в следующей ощибке: 
-* Основной - активный, рабочий. выключаем на нём 220В, он отдаёт активность рабочему резервному. 
-* Выключаем на резервном 24В, 
-* при этом активность не возвращается на основной прибор, а возвращается только если включить у него 220В 
+* Дата   12-12-2019 
+* Автор  Кругликов В.П.
+* 
+* Изменения:
+*   Изменена обработка пассивного состояния.
+*   Причина в следующей ошибке: 
+*   Основной - активный, рабочий. выключаем на нём 220 В, он отдаёт активность рабочему резервному. 
+*   Выключаем на резервном 24 В, 
+*   при этом активность не возвращается на основной прибор, а возвращается только если включить у него 220 В 
 */

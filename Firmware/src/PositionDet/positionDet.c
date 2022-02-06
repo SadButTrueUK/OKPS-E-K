@@ -17,9 +17,10 @@
 #include "asserts_ex.h"
 #include "ProtectionState_codes.h"
 #include "posDetGenerator.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
-// ќпределение локальных типизированных констант
+// ќбъ€вление локальных типизированных констант
 //*****************************************************************************
 static const ArrayPositionDet *ptrPosDet;        ///< ”казатель на переменную структуры интерфейса.
 
@@ -54,6 +55,7 @@ void PositionDet_run( void )
     ptrPosDet->run( );
     PosDetGenerator_run( );
     PosDetGenerator_checkUfb( );
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************

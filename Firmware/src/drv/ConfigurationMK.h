@@ -30,7 +30,7 @@
 #pragma config JTAGEN  = OFF           // JTAG запрещен.
 
 // FPOR
-#pragma config WDTWIN  = WIN25         // Выбор окна сторожевого таймера равным 25% от его периода.
+#pragma config WDTWIN  = WIN25         // Выбор окна сторожевого таймера равным 25 % от его периода.
 #pragma config BOREN   = ON            // Разрешен контроль питания МК.
 #pragma config ALTI2C1 = OFF           // Альтернативные пины I2C1 (ASDA1/ASCL1) отключены.
 #pragma config ALTI2C2 = OFF           // Альтернативные пины I2C2 (ASDA2/ASCL2) отключены.

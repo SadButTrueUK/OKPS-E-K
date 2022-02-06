@@ -1,5 +1,5 @@
 /**
-* \file    Dk.c
+* \file    LedFailure.c
 * \brief   \copybrief LedFailure.h
 *
 * \version 1.0.1

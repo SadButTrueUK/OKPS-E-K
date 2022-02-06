@@ -25,6 +25,7 @@
 #include "InterChannel.h"
 #include "shuntShiftMotor.h"
 #include "shuntShiftGen.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -38,7 +39,7 @@
 //*****************************************************************************
 /// \brief Период перезапуска ШИМа после определения КЗ силовой части в мс.
 ///
-#define PERIOD_RESTART_POWER     8000
+#define PERIOD_RESTART_POWER     4000
 
 //*****************************************************************************
 /// \brief Период перезапуска ШИМа после определения КЗ контрольного генератора в мс.
@@ -89,7 +90,7 @@
 #define ENABLE_RESET_FAILURE     CLEARBIT( LATA, 10 )         
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -98,9 +99,9 @@
 typedef enum
 {
     eScThreePhaseGenCheck,          ///< состояние определения наличия КЗ 3-фазного генератора
-    eScThreePhaseGenTimeout,        ///< состояние отсчёта таймаута перезапуска контроля
+    eScThreePhaseGenTimeout,        ///< состояние отсчёта тайм-аута перезапуска контроля
     
-    /// \brief состояние отсчёта таймаута на включение ШИМа управления двигателями (с учётом выхода в среднюю точку 
+    /// \brief состояние отсчёта тайм-аута на включение ШИМа управления двигателями (с учётом выхода в среднюю точку 
     /// ШИМа)
     ///
     eWaitingShuntShift              
@@ -122,7 +123,7 @@ typedef enum
 typedef enum
 {
     eScContrGenCheck,         ///< состояние определения наличия КЗ
-    eScContrGenTimeout        ///< состояние таймаута
+    eScContrGenTimeout        ///< состояние тайм-аута
 } StatesSCgen;
 
 //*****************************************************************************
@@ -151,7 +152,7 @@ typedef struct
 } ScContrGen;
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -345,7 +346,7 @@ static void procScContrGen_run( void )
                                 !CHECK_SC_GEN_PIN );
                 }
                 break;
-            case eScContrGenTimeout: // Отсчёт таймаута перезапуска
+            case eScContrGenTimeout: // Отсчёт тайм-аута перезапуска
                 if( strContrGen.cntRestart == 0 )
                 {
                     cntStep = eScContrGenCheck;
@@ -357,6 +358,7 @@ static void procScContrGen_run( void )
                 ERROR_ID( eGrPS_OverloadDetector, ePS_OverloadDetectorStateCntGenError );
         }
     }
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -377,7 +379,7 @@ static void procScThreePhaseGen_run( void )
     else if( CheckSupply_is24vOn( ) )
     {
         if( strThreePhaseGen.cntRestart ) 
-            strThreePhaseGen.cntRestart--; // отсчёт таймаута перезапуска  
+            strThreePhaseGen.cntRestart--; // отсчёт тайм-аута перезапуска  
         if( ++t_o == 100 )
         {
             if( !InterChannel_isHandling( eICId_OverloadDetScThreePhaseGen ) )
@@ -397,10 +399,10 @@ static void procScThreePhaseGen_run( void )
                     else // либо КЗ в нагрузке, либо аппаратная неисправность
                     {
                         strThreePhaseGen.ScThreePhaseGenTrig = true;
-                        // установить таймаут для сброса триггера защёлки и перезапуска проверки КЗ
+                        // установить тайм-аут для сброса триггера защёлки и перезапуска проверки КЗ
                         strThreePhaseGen.cntRestart = PERIOD_RESTART_POWER;
                         ShuntShiftMotor_setFailure( eShortCircuit );
-                        DISABLE_RESET_FAILURE; //запретить сброс аварии до истечения таймаута перезапуска
+                        DISABLE_RESET_FAILURE; //запретить сброс аварии до истечения тайм-аута перезапуска
                         cntStep = eScThreePhaseGenTimeout;
                     }
                 }
@@ -409,10 +411,10 @@ static void procScThreePhaseGen_run( void )
                     strThreePhaseGen.ScThreePhaseGenTrig = false;
                 }
                 break;
-            case eScThreePhaseGenTimeout: // Отсчёт таймаута перезапуска
+            case eScThreePhaseGenTimeout: // Отсчёт тайм-аута перезапуска
                 if( strThreePhaseGen.cntRestart == 0 )
                 {
-                    ENABLE_RESET_FAILURE; // таймаут истёк, сбросить триггер аварии КЗ для перезапуска ШИМа
+                    ENABLE_RESET_FAILURE; // тайм-аут истёк, сбросить триггер аварии КЗ для перезапуска ШИМа
                     strThreePhaseGen.isScThreePhaseGen = false; // сбросить признак КЗ
                     checkScThreePhaseGen.inPrv = false;
                     strThreePhaseGen.cntRestart = WAITING_FOR_SHUNT_SHIFT;
@@ -420,7 +422,7 @@ static void procScThreePhaseGen_run( void )
                 }
                 break;
             
-            // отсчёт таймаута на включение ШИМа управления двигателями (с учётом выхода в среднюю точку ШИМа)
+            // отсчёт тайм-аута на включение ШИМа управления двигателями (с учётом выхода в среднюю точку ШИМа)
             case eWaitingShuntShift: 
                 if( strThreePhaseGen.cntRestart == 0 )
                 {

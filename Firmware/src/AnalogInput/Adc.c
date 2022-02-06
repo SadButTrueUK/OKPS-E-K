@@ -4,13 +4,12 @@
 * 
 * \version 2.0.2
 * \date    12-03-2020
-* \author  Годунок А.Н., Агулов М.А.
+* \author  Агулов М.А.
 */
 
 //*****************************************************************************
 // Подключаемые файлы
 //*****************************************************************************
-#include "typeMK.h"
 #include "asserts.h"
 #include "AnalogInputId.h"
 #include "ProtectionState_codes.h"
@@ -35,7 +34,7 @@
 #define QUEUE_SIZE (AnalogInputDrvQueueSize + 1)
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -61,25 +60,19 @@ typedef struct tagQueueArray
 ///
 typedef struct tagAdc
 {
-    uint16_t   doneErrorCounter;                    ///< Счетчик отсутствия готовности.
     QueueArray queue;                               ///< Очередь драйвера.
 } Adc;
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************
-/// \brief Допустимое количество попыток чтения данных при отсутствии готовности АЦП.
-///
-const uint16_t doneErrorCount = 3 * CASSERT_INC;
+// Объявление локальных переменных
+//*****************************************************************************
+extern uint16_t ADCbuf[32];
 
-//*****************************************************************************
-// Определение локальных переменных
-//*****************************************************************************
-
-//*****************************************************************************
-static Adc adc;                                     ///< Объект АЦП.
+static Adc adc = {.queue.front = &adc.queue.buf[0], .queue.rear = &adc.queue.buf[0]};                                   ///< Объект АЦП.
 
 //*****************************************************************************
 // Реализация интерфейсных функций
@@ -89,26 +82,20 @@ static Adc adc;                                     ///< Объект АЦП.
 // Инициализация модуля.
 void Adc_ctor( void )
 {
-    adc.queue.rear  = &adc.queue.buf[0];
-    adc.queue.front = &adc.queue.buf[0];
-    adc.doneErrorCounter = 0;
-    AdcDriver_ctor( eAdc1 );
+    AdcDrv_ctor( );
 }
 
 //*****************************************************************************
 // Чтение результатов измерения из очереди измерений
 void Adc_get( uint16_t *array)
 {
-    ASSERT_ID( eGrPS_AdcDrv, ePS_AdcDrvSetSize, eAinChCount == eAinChCount );
-
-    memcpy(array, &adc.queue.rear->data[0], eAinChCount * sizeof (adc.queue.rear->data[0]));                       
+    memcpy(array, &adc.queue.rear->data[0], eAinChCount * sizeof (adc.queue.rear->data[0]));                            // Копирование результатов из очереди измерений
     
-    adc.queue.rear == &adc.queue.buf[QUEUE_SIZE - 1] ? ( adc.queue.rear = &adc.queue.buf[0] ) : 
-                                                         adc.queue.rear++;
+    adc.queue.rear == &adc.queue.buf[QUEUE_SIZE - 1] ? ( adc.queue.rear = &adc.queue.buf[0] ) : adc.queue.rear++;       // Смещение указателя очереди
 }
 
 //******************************************************************************
-// Наличие результатов измерений в очереди
+// Проверка наличия результатов измерений в очереди
 bool Adc_isReady( void )
 {
     return adc.queue.front != adc.queue.rear;
@@ -116,41 +103,33 @@ bool Adc_isReady( void )
 
 //******************************************************************************
 // Управление драйвером АЦП и копирование результатов измерений в очередь измерений
-void Adc_run( void )
+void Adc_run_interrupt( void )
 {
-    uint16_t aTemp[eAinChCount];
-
-    CASSERT_ID( eGrPS_AdcDrv, ePS_AdcDoneError,
-                adc.doneErrorCounter, doneErrorCount,
-                AdcDriver_isReady( eAdc1 ) );
-
-    AdcDriver_start( eAdc1 );
-
+    AdcDrv_Stop( );
     
-    if( AdcDriver_isReady( eAdc1 ) )
-    {
-        AdcDriver_get( eAdc1, aTemp, eAinChCount );
+    // Копируем значения из буфера DMA в очередь АЦП
+    adc.queue.front->data[eAinchR1]   = ADCbuf[0];
+    adc.queue.front->data[eAinchR2]   = ADCbuf[1];
+    adc.queue.front->data[eAinchK3V3] = ADCbuf[2];
+    adc.queue.front->data[eAinchREF]  = ADCbuf[3];
+    adc.queue.front->data[eAinchKREF] = ADCbuf[4];
+    adc.queue.front->data[eAinchGEN]  = ADCbuf[5];
+    adc.queue.front->data[eAinchUV]   = ADCbuf[6];
+    adc.queue.front->data[eAinchIV]   = ADCbuf[7];
+    adc.queue.front->data[eAinchIW]   = ADCbuf[8];
+    adc.queue.front->data[eAinchIU]   = ADCbuf[9];
+    adc.queue.front->data[eAinchUU]   = ADCbuf[10];
+    adc.queue.front->data[eAinchUW]   = ADCbuf[11];
 
-        adc.queue.front->data[eAinchR1]   = aTemp[0];
-        adc.queue.front->data[eAinchR2]   = aTemp[1];
-        adc.queue.front->data[eAinchK3V3] = aTemp[2];
-        adc.queue.front->data[eAinchREF]  = aTemp[3];
-        adc.queue.front->data[eAinchKREF] = aTemp[4];
-        adc.queue.front->data[eAinchGEN]  = aTemp[5];
-        adc.queue.front->data[eAinchUV]   = aTemp[6];
-        adc.queue.front->data[eAinchIV]   = aTemp[7];
-        adc.queue.front->data[eAinchIW]   = aTemp[8];
-        adc.queue.front->data[eAinchIU]   = aTemp[9];
-        adc.queue.front->data[eAinchUU]   = aTemp[10];
-        adc.queue.front->data[eAinchUW]   = aTemp[11];
+    AdcDrv_Start( );
+    
+   
+    // Добавление результатов преобразований АЦП в очередь
+    adc.queue.front == &adc.queue.buf[QUEUE_SIZE - 1] ? ( adc.queue.front = &adc.queue.buf[0] ) : adc.queue.front++;
 
-        adc.queue.front == &adc.queue.buf[QUEUE_SIZE - 1] ? ( adc.queue.front = &adc.queue.buf[0] ) : 
-                                                              adc.queue.front++;
-
-        // Если после того, как мы добавили данные, указатели записи и чтения 
-        // стали указывать на один и тот же элемент - произошло переполнение буфера
-        ASSERT_ID( eGrPS_AdcDrv, ePS_AdcOverflow, adc.queue.front != adc.queue.rear );
-    }
+    // Если после того, как мы добавили данные, указатели записи и чтения 
+    // стали указывать на один и тот же элемент - произошло переполнение очереди
+    ASSERT_ID( eGrPS_AdcDrv, ePS_AdcOverflow, adc.queue.front != adc.queue.rear );
 }
 
 //*****************************************************************************
@@ -158,6 +137,7 @@ void Adc_run( void )
 * История изменений:
 * 
 * Версия 1.0.1
+* Дата   11-03-2016
 * Автор  Годунок А.Н.
 * 
 * Изменения:

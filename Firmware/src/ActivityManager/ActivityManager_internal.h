@@ -65,7 +65,7 @@ void ActivityManager_setNeighborRS422connect( ActivityManager_DeviceStr *str, Rs
 /// \param line - номер линии св€зи;
 /// \param connect - состо€ние св€зи соседа (true (есть св€зь), false (нет св€зи)).
 ///
-void ActivityManager_setNeighborRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs422_numLine line,
+void ActivityManager_setPositionShunt( ActivityManager_DeviceStr *str, Rs422_numLine line,
                                                      bool connect );
 
 //*****************************************************************************
@@ -100,6 +100,28 @@ bool ActivityManager_getRS422ctrlSysConnect( ActivityManager_DeviceStr *str, Rs4
 /// \param state - состо€ние инициализации соседа (false - в процессе, true - окончено).
 /// 
 void ActivityManager_writeNeighborIsInWork( ActivityManager_DeviceStr *str, bool state );
+
+//*****************************************************************************
+///\brief ”становить состо€ние положени€ стрелки соседа 
+/// \param str - указатель на структуру состо€ни€.
+/// \param state - состо€ние инициализации соседа (false - в процессе, true - окончено).
+/// 
+void ActivityManager_setNeighborPositionShunt( ActivityManager_DeviceStr *str, uint8_t state );
+
+//*****************************************************************************
+///\brief  ѕолучить состо€ние положени€ стрелки соседа
+/// \param str - указатель на структуру состо€ни€.
+/// \retval - значение положени€ стрелки соседнего прибора
+uint8_t ActivityManager_getNeighborPositionShunt( ActivityManager_DeviceStr *str );
+
+
+//*****************************************************************************
+///\brief  ѕолучить состо€ние св€зи соседа с ”— по интерфейсу RS-422;
+/// \param str - указатель на структуру состо€ни€;
+/// \retval true  - есть св€зь;
+/// \retval false - нет св€зи.
+bool ActivityManager_getNeighborRS422connect( ActivityManager_DeviceStr *str );
+
 
 #endif 
 

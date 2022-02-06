@@ -2,9 +2,9 @@
 * \file    AnalogMeasurement.c
 * \brief   \copybrief AnalogMeasurement.h 
 *
-* \version 2.0.1
-* \date    16-05-2017
-* \author  Васильченко А.В.
+* \version 2.0.4
+* \date    15-03-2021
+* \author  Агулов М.А.
 */
 
 //*****************************************************************************
@@ -18,6 +18,7 @@
 #include "InterChannel.h"
 #include "AnalogMeasurement.h"
 #include "IntegrCtrl.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
 // Локальные константы, определенные через макросы
@@ -51,7 +52,7 @@
 #define   UBUF_NOMINAL                  4095UL         ///< Номинальное значение буферного напряжения (в единицах АЦП).
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -59,6 +60,7 @@ static int synchroTimeControl;                    ///< Счетчик времени для синхр
 
 //*****************************************************************************
 static AnalogMeasurementValue analogMeasData[eAinChCount];             ///< Объект обработки аналоговых сигналов.
+
 
 //*****************************************************************************
 // Реализация интерфейсных функций
@@ -89,7 +91,7 @@ void AnalogMeasurement_ctor( void )
             eAinScriptDC,
             0,
             128 );
-    AnalogInput_setChannelSettings( eAinchREF, // Канал опорного напряжения контроллера
+    AnalogInput_setChannelSettings( eAinchREF, // Канал напряжения для контроля правильности функционирования АЦП 
             eDigitalFilterOff,
             eAinScriptDC,
             0,
@@ -204,8 +206,9 @@ void AnalogMeasurement_ctor( void )
 // Обработка аналоговых сигналов
 void AnalogMeasurement_run( void )
 {
-    static const uint16_t timeoutStartCtrlVolt = 500;
-   
+    #define TIMEOUT_START_CTRL_VOLT  500
+    static uint16_t t_o = TIMEOUT_START_CTRL_VOLT;
+    
     //*****************************************************************************
     // Обработка данных прочитанных с АЦП
     AnalogInput_run( );
@@ -243,15 +246,15 @@ void AnalogMeasurement_run( void )
             synchroTimeControl = ANALOG_SYNCHRO_PERIOD;
             break;
 
-        case 2:
+        case 4:
             InterChannel_synchronize( eICId_U_R2rms, analogMeasData[eAinchR2].rms );
             break;
 
-        case 4:
+        case 8:
             InterChannel_synchronize( eICId_U_GENrms, analogMeasData[eAinchGEN].rms );
             break;
 
-        case 6:
+        case 12:
             if( IntegrCtrl_isOn( ) )
                 temp = analogMeasData[eAinchIW].value;
             else
@@ -259,7 +262,7 @@ void AnalogMeasurement_run( void )
             InterChannel_synchronize( eICId_IW_rms, temp );
             break;
 
-        case 8:
+        case 16:
             if( IntegrCtrl_isOn( ) )
                 temp = analogMeasData[eAinchIU].value;
             else
@@ -267,24 +270,23 @@ void AnalogMeasurement_run( void )
             InterChannel_synchronize( eICId_IU_rms, temp );
             break;
 
-        case 10:
+        case 20:
             if( IntegrCtrl_isOn( ) )
                 temp = analogMeasData[eAinchIV].value;
             else
                 temp = analogMeasData[eAinchIV].rms;
             InterChannel_synchronize( eICId_IV_rms, temp );
             break;
-       
             
-        case 12:
+        case 24:
             InterChannel_synchronize( eICId_IV_value, analogMeasData[eAinchIV].value );
             break;
 
-        case 14:
+        case 28:
             InterChannel_synchronize( eICId_IU_value, analogMeasData[eAinchIU].value );
             break;
 
-        case 16:
+        case 32:
             InterChannel_synchronize( eICId_IW_value, analogMeasData[eAinchIW].value );
             break;
         
@@ -292,14 +294,14 @@ void AnalogMeasurement_run( void )
             break;
     }
     
-    static uint16_t t_o = timeoutStartCtrlVolt;
+    
     if( t_o > 0 ) 
     {
         t_o--;
     } 
     else 
     {
-        ASSERT_EX_ID( eGrPS_ControlSupplyVoltage, ePS_FaultU5V,
+        ASSERT_EX_ID( eGrPS_ControlSupplyVoltage, ePS_FaultU3_3V,
                 abs( analogMeasData[ eAinchK3V3 ].value - U3V3_NOMINAL ) < ( U3V3_NOMINAL * U3V3_MAX_ERR / 100U ),
                 analogMeasData[ eAinchK3V3 ].value, // параметр 1 - текущее значение контролируемого сигнала,
                 U3V3_NOMINAL, // параметр 2 - эталонное значение контролируемого сигнала,                
@@ -319,15 +321,12 @@ void AnalogMeasurement_run( void )
                 UBUF_NOMINAL, // параметр 2 - эталонное значение контролируемого сигнала,                
                 UBUF_MAX_ERR, // параметр 3 - допустимое отклонение,  %              
                 0 );
+        t_o = TIMEOUT_START_CTRL_VOLT;
     }
+    MARKED_CALL_FUNCTION;
 }
 
-//*****************************************************************************
-// Чтение результатов измерения АЦП
-void AnalogMeasurement_runInterrupt( void )
-{
-    AnalogInput_runInterrupt( );
-}
+
 //*****************************************************************************
 // Чтение измеренных значений, определяется используемой системой физических величин
 const AnalogMeasurementValue *AnalogMeasurement_getData( uint16_t channel )
@@ -337,6 +336,9 @@ const AnalogMeasurementValue *AnalogMeasurement_getData( uint16_t channel )
             2, channel, 0, 0 );
     return &analogMeasData[channel];
 }
+
+
+
 
 //*****************************************************************************
 /**
@@ -356,5 +358,27 @@ const AnalogMeasurementValue *AnalogMeasurement_getData( uint16_t channel )
 * Изменения:
 *    1. Введены процедуры межканального контроля значения параметров.
 *    2. Убраны синхронизации значений Uref и теста буферного регистра.
-*    3. Изменен период синхронизации параметров.  
+*    3. Изменен период синхронизации параметров.
+*
+* Версия 2.0.2
+* Дата   16-09-2020
+* Автор  Кругликов В.П. 
+*
+* Изменения:
+*   Добавлена интерфейсная функция  AnalogMeasurement_getMiddleValue
+*   для фильтрации мгновенных значений при использовании сценария eAinScriptAC
+*
+* Версия 2.0.3
+* Дата   24-02-2021
+* Автор  Кругликов В.П. 
+*
+* Изменения:
+*   Устранена ошибка неустановки тайм-аута измерений напряжений питания, опорного и буферных регистров АЦП
+*
+* Версия 2.0.4
+* Дата   15-03-2021
+* Автор  Агулов М.А.
+* 
+* Изменения:
+* Функция AnalogMeasurement_runInterrupt() убрано, т.к. АЦП работает с DMA
 */

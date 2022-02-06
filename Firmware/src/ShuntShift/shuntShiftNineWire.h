@@ -19,8 +19,23 @@
 //*****************************************************************************
 #include "shuntShiftTypes.h"
 
+
+typedef enum 
+{
+    eInit        = 0,        ///< начальная инициализация
+    eStart,                  ///< начало движения
+    eStop,                   ///< состояние "Стоп"
+    eInitPosDet,             ///< состояние ожидания определения положения
+    eRunning,                ///< движение
+    eShutdown,               ///< отключение
+    eFriction,               ///< работа на фрикцию при калибровочном переводе          
+    eCalibratingInProcess,    ///< калибровка в конце калибровочного перевода        
+    eWaitingForWrThresholdToEEPROM,
+    eWaitingForWrShiftTimeToEEPROM        
+} ShiftNineWireStates;
+
 //*****************************************************************************
-// Определение глобальных типизированных констант
+// Объявление глобальных типизированных констант
 //*****************************************************************************
 extern const ArrayShuntShift nineWireShuntShift;        // Переменная структуры интерфейса.
 
@@ -115,6 +130,22 @@ const uint8_t NineWireEcShuntShift_getCntPhaseShift( void );
 /// \return true - модуль в рабочем режиме , false - модуль в  режиме инициализации 
 ///
 const bool NineWireEcShuntShift_isWorkMode( void );
+
+//*****************************************************************************
+/// \brief Установить поле dgn статуса из другого модуля
+/// \param val - устанавливаемое значение поля dgn.
+///
+void NineWireShuntShift_setDgn( ShiftDgn val );
+
+//*****************************************************************************
+/// \brief Установить время последнего перевода из другого модуля
+/// \param val - устанавливаемое значение времени
+///
+void NineWireShuntShift_setTime( uint16_t val );
+
+extern uint16_t thresholdFriction, middleCurrShuntShift, middleCurrFriction; 
+
+ShiftNineWireStates NineWireShuntShift_getStateCnt( void );
 
 #endif
 

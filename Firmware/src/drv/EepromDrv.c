@@ -56,7 +56,7 @@
     } while( 0 )
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -310,6 +310,18 @@ void EepromDrv_write( const void *self, uint16_t addressCell, uint16_t data )
     }
 }
 
+
+//*****************************************************************************
+// Старт записи в EEPROM 16-битного значения, одноканальный режим работы
+void EepromDrv_write_start( const void *self, uint16_t addressCell, uint16_t data )
+{
+    EepromDrv *me = ( EepromDrv * )self;
+
+    ASSERT_ID_EEPROM( eGrPS_Eeprom, ePS_EepromAccess, me->exist );
+    EepromDrv_setWrite( me, addressCell, data );
+    me->synchro = false;
+}
+
 //*****************************************************************************
 // Чтение из EEPROM 16-битного значения, одноканальный режим работы
 uint16_t EepromDrv_read( const void *self, uint16_t addressCell )
@@ -349,6 +361,7 @@ uint16_t EepromDrv_getData( const void *self )
 * История изменений:
 * 
 * Версия 1.0.1
+* Дата   19-12-2016
 * Автор  Третьяков В.Ж.
 * 
 * Изменения:

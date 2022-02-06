@@ -25,7 +25,7 @@
 #define MOTOR_SHUTDOWN_TO     300        ///< Время отключения двигателя.
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -61,7 +61,7 @@ typedef union
 } uShuntShiftFiveEc_flags;
 
 //*****************************************************************************
-// Определение локальных типизированных констант
+// Объявление локальных типизированных констант
 //*****************************************************************************
 
 //*****************************************************************************
@@ -82,11 +82,13 @@ const ArrayShuntShift fiveWireEcShuntShift =
     FiveWireEcShuntShift_getDgn,
     FiveWireEcShuntShift_setCntPhaseShift,
     FiveWireEcShuntShift_getCntPhaseShift,
-    FiveWireEcShuntShift_isWorkMode
+    FiveWireEcShuntShift_isWorkMode,
+    FiveWireShuntShift_setDgn,
+    FiveWireShuntShift_setTime
 };
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 static          uShuntShiftFiveEc_flags flags;              ///< Флаги состояния.
 static          ShiftFiveEcStates       stateCnt;           ///< Счетчик состояния.
@@ -96,7 +98,7 @@ static          ShiftDirection          reqDir;             ///< Требуемая позиц
 static          ShiftDirection          setDir;             ///< Установленная позиция для перевода.
 static          PositionDet_State       pos;                ///< Фактическое положение.
 static uint16_t                         setTime;            ///< Устанавливаемое время.
-static uint16_t                         timeoutCnt;         ///< Счетчик таймаутов.
+static uint16_t                         timeoutCnt;         ///< Счетчик тайм-аутов.
 static          ShiftDgn                dgn;                ///< Состояние последнего перевода. 
 static uint16_t                         shiftTime;          ///< Время последнего перевода.
 static uint8_t                          repeatShift;        ///< Режим повторного перевода.
@@ -125,7 +127,7 @@ void FiveWireEcShuntShift_ctor( void )
 // Управление работой
 void FiveWireEcShuntShift_run( void )
 {
-    if( timeoutCnt ) timeoutCnt--; //Декремент счетчика таймаутов
+    if( timeoutCnt ) timeoutCnt--; //Декремент счетчика тайм-аутов
 
     switch( stateCnt )
     {
@@ -145,8 +147,8 @@ void FiveWireEcShuntShift_run( void )
 
         case eInitPosDet: // Ожидание определения положения
             if( timeoutCnt == 0 && setPos == reqPos )
-            { // Таймаут истек
-                // Проверка установленной позиции для определ положения
+            { // Тайм-аут истек
+                // Проверка установленной позиции для определения положения
                 if( ( flags.str.dir && pos == eDetPlus ) || // Фактическое положение соответствует 
                     ( flags.str.dir == 0 && pos == eDetMinus ) )
                 { // устанавливаемому положению
@@ -195,7 +197,7 @@ void FiveWireEcShuntShift_run( void )
             }
             break;
 
-        case eShutdown: //Ожидание останова двигателя
+        case eShutdown: //Ожидание остановки двигателя
             if( timeoutCnt == 0 && !ShuntShiftMotor_isOn( ) )
             { // Двигатель отключен
                 reqDir = eShiftStop;
@@ -214,8 +216,8 @@ void FiveWireEcShuntShift_run( void )
 
         case eFinalPosDet: // Ожидание определения положения
             if( timeoutCnt == 0 && setPos == reqPos )
-            { // Таймаут истек
-                // Проверка установленной позиции для определ положения
+            { // Тайм-аут истек
+                // Проверка установленной позиции для определения положения
                 if( ( flags.str.dir && pos == eDetPlus ) || // Фактическое положение соответствует 
                     ( flags.str.dir == 0 && pos == eDetMinus ) )
                 { // устанавливаемому положению
@@ -329,6 +331,15 @@ const bool FiveWireEcShuntShift_isWorkMode( void )
     return false;
 }
 
+void FiveWireShuntShift_setDgn( ShiftDgn val )
+{
+    dgn = val;
+}
+
+void FiveWireShuntShift_setTime( uint16_t val )
+{
+    shiftTime = val;
+}
 
 //*****************************************************************************
 /**

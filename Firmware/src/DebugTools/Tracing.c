@@ -1,9 +1,10 @@
 /**
 * \file    Tracing.c
-*
+* \brief   \copybrief Tracing.h
+* 
 * \version 1.0.2
 * \date    05-03-2020
-* \author  Третьяков В.Ж., Агулов М.А.
+* \author  Агулов М.А.
 */
 
 //*****************************************************************************
@@ -14,7 +15,7 @@
 #include "Tracing.h"
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -57,21 +58,20 @@ void Tracing_parameterId( uint16_t data, uint16_t id, uint16_t numberArray )
 // Сохранение данных трассировки в EEPROM
 void Tracing_saveBlackBox( void )
 {
-    uint16_t adr = ADDRESS_EEPROM_TRACING_START;                                // Начальный адрес буферов трасссировки в EEPROM
+    uint16_t adr = ADDRESS_EEPROM_TRACING_START;                                // Начальный адрес буферов трассировки в EEPROM
 
-    Eeprom_write( ADDRESS_EEPROM_STRUCT_TRACING, ADDRESS_EEPROM_TRACING_START );// Сохранени в EEPROM начального адреса буферов трассировки
-    Eeprom_write( ADDRESS_EEPROM_STRUCT_TRACING + 2, TRACING_BUF_QTY );         // Сохранени в EEPROM количества буферов трассировки
-    Eeprom_write( ADDRESS_EEPROM_STRUCT_TRACING + 4, TRACING_BUF_SIZE );        // Сохранени в EEPROM размера буфера трассировки
+    Eeprom_write( ADDRESS_EEPROM_STRUCT_TRACING, ADDRESS_EEPROM_TRACING_START );// Сохранение в EEPROM начального адреса буферов трассировки
+    Eeprom_write( ADDRESS_EEPROM_STRUCT_TRACING + 2, TRACING_BUF_QTY );         // Сохранение в EEPROM количества буферов трассировки
+    Eeprom_write( ADDRESS_EEPROM_STRUCT_TRACING + 4, TRACING_BUF_SIZE );        // Сохранение в EEPROM размера буфера трассировки
     
     for( uint16_t i = 0; i < TRACING_BUF_QTY; i++ )
     {
         for( uint16_t j = 0; j < TRACING_BUF_SIZE; j++ )
         {
-            (aTracingBufIdx[i] >= TRACING_BUF_SIZE) ? (aTracingBufIdx[i] = 0) : 
-                                                       aTracingBufIdx[i]++;     // Контроль границ индекса буфер трассировки
-
-            Eeprom_write( adr, aTracingBuf[i][aTracingBufIdx[i]] );             // Сохранени в EEPROM значения буфера трассировки
-
+            if ( aTracingBufIdx[i] >= TRACING_BUF_SIZE ) 
+                aTracingBufIdx[i] = 0; 
+            
+            Eeprom_write( adr, aTracingBuf[i][aTracingBufIdx[i]++] );             // Сохранение в EEPROM значения буфера трассировки
             adr += 2;
         }
     }
@@ -95,9 +95,11 @@ void Tracing_saveBlackBox( void )
 * 
 * Изменения:
 *    Базовая версия.
-*  
+* 
 * Версия 1.0.2
 * Дата   05-03-2020
 * Автор  Агулов М.А.
-* Увеличено количество буферов до семи.
+* 
+* Изменения:
+*   Увеличено количество буферов до семи.
 */

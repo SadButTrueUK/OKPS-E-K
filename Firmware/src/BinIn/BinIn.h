@@ -54,7 +54,7 @@ void BinIn_ctor( void );
 
 //*****************************************************************************
 /// \brief Обработка входных сигналов, считанных в прерываниях 
-/// функцией #BinIn_interruptDataRead.
+/// функцией #BinInDataRead_interrupt.
 ///
 void BinIn_run( void );
 

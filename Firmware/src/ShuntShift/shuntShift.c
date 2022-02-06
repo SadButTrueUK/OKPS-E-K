@@ -17,9 +17,10 @@
 #include "shuntShiftMotor.h"
 #include "asserts_ex.h"
 #include "ProtectionState_codes.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
-// ќпределение локальных типизированных констант
+// ќбъ€вление локальных типизированных констант
 //*****************************************************************************
 static const ArrayShuntShift *ptrShuntShift;        ///< ”казатель на переменную структуры интерфейса.
 
@@ -52,6 +53,7 @@ void ShuntShift_run( void )
 {
     ptrShuntShift->run( );
     ShuntShiftMotor_run( );
+    MARKED_CALL_FUNCTION;
 }
 
 //*****************************************************************************
@@ -137,6 +139,18 @@ const bool ShuntShift_isWorkMode( void )
 {
     return ptrShuntShift->isWorkMode;
 }
+
+void ShuntShift_setDgn( ShiftDgn val )
+{
+    ptrShuntShift->setDgn( val );
+}
+
+void ShuntShift_setTime( uint16_t val )
+{
+    ptrShuntShift->setTimeShift( val ); 
+}
+
+
 //*****************************************************************************
 /**
 * »стори€ изменений:

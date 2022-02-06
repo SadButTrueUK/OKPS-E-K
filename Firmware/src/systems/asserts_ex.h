@@ -44,9 +44,11 @@
 //*****************************************************************************
 #define ERROR_EX_ID( group_, id_, p1_, p2_, p3_, p4_ )                ( ( void )0 )
 #define ERROR_EX( p1_, p2_, p3_, p4_ )                                ( ( void )0 )
+#define ERROR_EX2_ID( group_, id_, p1_, p2_ )                         ( ( void )0 )
 #define ASSERT_EX_ID( group_, id_, test_, p1_, p2_, p3_, p4_ )        ( ( void )0 )
+#define ASSERT_EX2( test_, p1_, p2_ )                                 ( ( void )0 )
 #define ASSERT_EX( test_, p1_, p2_, p3_, p4_ )                        ( ( void )0 )
-
+#define ASSERT_EX2_ID( group_, id_, test_, p1_, p2_ )                 ( ( void )0 )
 #define CASSERT_EX_ID( group_, id_, counter_, maxcount_, test_,                \
                        p1_, p2_, p3_, p4_ )                        ( ( void )0 )
 #define CASSERT_EX( counter_, maxcount_, test_,                                \
@@ -116,6 +118,22 @@
             ERROR_EX_ID( ASSERT_DEF_CODE, ASSERT_DEF_CODE, p1_, p2_, p3_, p4_ ) \
 
 //*****************************************************************************
+        /// \brief Ошибка с идентификацией отказа и сохранением 2 параметров.
+        /// \param group_ - тип отказа;
+        /// \param id_    - идентификатор отказа;
+        /// \param p1_    - параметр отказа 1;
+        /// \param p2_    - параметр отказа 2.
+        ///
+        #define ERROR_EX2_ID( group_, id_, p1_, p2_ ) do                             \
+        {                                                                            \
+            BlackBox_saveAddCodeProtectionState( ( uint16_t )( p1_ ),( uint8_t )0 ); \
+            BlackBox_saveAddCodeProtectionState( ( uint16_t )( p2_ ),( uint8_t )1 ); \
+            sysAssertException( __FILE__, LINE_NUMBER, ( group_ ), ( id_ ) );        \
+        } while( 0 )
+            
+
+
+//*****************************************************************************
 /// \brief Расширенная проверка утверждения с использованием типа
 /// и идентификатора исключения.
 /// \param group_ - тип отказа;
@@ -138,6 +156,41 @@
             ERROR_EX_ID( group_, id_, p1_, p2_, p3_, p4_ );            \
         }                                                              \
     } while( 0 )
+
+  //*****************************************************************************
+    /// \brief Проверка утверждения с идентификацией отказа и сохранением 2 параметров.
+    /// \param group_ - тип отказа;
+    /// \param id_    - идентификатор отказа;
+    /// \param test_  - проверяемое условие;
+    /// \param p1_    - параметр отказа 1;
+    /// \param p2_    - параметр отказа 2.
+    /// \note Макрос проверяет, что условие \a test выполняется. Если аргумент 
+    /// \a test имеет значение false, вызывается макрос #ERROR_ID.
+    /// \note Если определена директива \a DISABLED_ASSERT, проверка утверждения 
+    /// не выполняется.
+    /// 
+    #define ASSERT_EX2_ID( group_, id_, test_, p1_, p2_ )  do          \
+    {                                                                  \
+        if( !( test_ ) )                                               \
+        {                                                              \
+            ERROR_EX2_ID( group_, id_, p1_, p2_ );                     \
+        }                                                              \
+    } while( 0 )
+
+//*****************************************************************************
+    /// \brief Проверка утверждения с сохранением 2 параметров.
+    /// \param test_  - проверяемое условие;
+    /// \param p1_    - параметр отказа 1;
+    /// \param p2_    - параметр отказа 2.
+    /// \note Макрос вызывает #ASSERT_ID c
+    /// параметрами \a group_ и \a id_ равными #ASSERT_DEF_CODE.
+    /// \note Если определена директива \a DISABLED_ASSERT, проверка утверждения
+    /// не выполняется.
+    /// 
+    #define ASSERT_EX2( test_, p1_, p2_ )                                 \
+         ASSERT_EX2_ID( ASSERT_DEF_CODE, ASSERT_DEF_CODE, test_,          \
+                     p1_, p2_ ) 
+
 
 //*****************************************************************************
 /// \brief Расширенная проверка утверждения.

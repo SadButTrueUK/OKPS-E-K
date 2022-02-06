@@ -2,20 +2,24 @@
 * \file    Rs422_transceiver.c
 * \brief   \copybrief Rs422_transceiver.h
 *
-* \version 1.0.1
-* \date    22-05-2017
-* \author  Кругликов В.П.
+* \version 1.0.4
+* \date    15-03-2021
+* \author  Третьяков В.Ж.
 */
 
 //*****************************************************************************
 // Подключаемые файлы
 //*****************************************************************************
+#include <xc.h>
 #include "Rs422_transceiver.h"
 #include "Rs422_crc8.h"
 #include "asserts_ex.h"
-#include "dsPIC33_rs422.h"
 #include "WorkWithBits.h"
 #include "InterChannel.h"
+#include "Rs422DriverMacros.h"
+#include "UartPinRemap.h"
+#include "MessageVersion.h"
+#include "defCompil.h"
 
 //*****************************************************************************
 // Реализация интерфейсных функций
@@ -23,26 +27,50 @@
 
 //*****************************************************************************
 // Инициализация переменных приема телеграмм по RS-422
-void inRS422_ctor( InRS422 *inStr )
+void inRS422_ctor( InRS422 *inStr, Rs422_numLine numLine )
 {
     uint8_t i;
 
     inStr->indWriteArray = 0;
     inStr->indReadArray = 0;
     inStr->indDate = 0;
-
-    for( i = 0; i < V_ARRAY_IN_RS422; i++ ) inStr->aLength[i] = 0;
+    inStr->ndxReadReg = 0;  
+    inStr->ndxWriteReg = 0;
+        
+    for( i = 0; i < V_ARRAY_IN_RS422; i++ ) 
+        inStr->aLength[i] = 0;
+        
+    if ( numLine == eRs422_line_1 )        
+    {  
+        UART1_PIN_REMAP;
+        INIC_UART_L1;          
+        INIC_PORT_DE_L1;
+    }
+    else
+    {
+        UART2_PIN_REMAP;
+        INIC_UART_L2;   
+        INIC_PORT_DE_L2;
+    }
     inStr->state = eStateInWaitDle;
 }
 
 //*****************************************************************************
 // Инициализация переменных передачи данных по RS-422
-void outRS422_ctor( OutRS422 *outStr )
+void outRS422_ctor( OutRS422 *outStr, Rs422_numLine numLine )
 {
     uint8_t i;
 
-    outStr->manageInOut( OBMEN_PRIEM );
-    for( i = 0; i < N_ARRAY_OUT_RS422; i++ ) outStr->aOutRS422[i] = 0;
+    if ( numLine == eRs422_line_1 ) 
+    {
+        SET_DE_L1( OBMEN_PRIEM );
+    }
+    else 
+    {
+        SET_DE_L2( OBMEN_PRIEM );
+    }
+    for( i = 0; i < N_ARRAY_OUT_RS422; i++ ) 
+        outStr->aOutRS422[i] = 0;
     outStr->indDate = 0;
     outStr->length = 0;
     outStr->state = eStateOutWaitData;
@@ -50,27 +78,78 @@ void outRS422_ctor( OutRS422 *outStr )
 }
 
 //*****************************************************************************
+// Прием данных с регистра UART.
+void inRS422_readReg( InRS422 *inStr, Rs422_numLine numLine )
+{
+    bool rezData;
+    uint8_t data;
+  
+    inStr->cInReadRegTime++;
+    
+    while ( true )
+    { 
+        rezData = false;
+        if ( numLine == eRs422_line_1 )        
+        {     
+            if( L1_UART_IS_DATA_IN )
+            {
+                data = L1_UART_REG_IN;
+                //17.02.21.- Евсеев- L1_UART_CLEAR_OERR; // сброс переполнения буфера
+                rezData = true;
+            }
+        } 
+        else
+        {
+            if( L2_UART_IS_DATA_IN )
+            {
+                data = L2_UART_REG_IN;
+                //17.02.21.- Евсеев- L2_UART_CLEAR_OERR; // сброс переполнения буфера
+                rezData = true;
+            }
+        }
+        if( rezData )
+        {
+            inStr->aInReadRegTime[ inStr->ndxWriteReg ] = inStr->cInReadRegTime;
+            inStr->aInReadReg[ inStr->ndxWriteReg++ ] = data;
+            if ( inStr->ndxWriteReg >= V_ARRAY_IN_REG ) inStr->ndxWriteReg = 0;
+        }
+        else break;
+    }
+    /* 17.02.21.0 Евсеев: Согласно datasheet флаг ошибки переполнения OERR нужно сбрасывать после вычитки буфера, */
+    /* иначе все данные в буфере (4 байта в FIFO + 1 байт в UxRSR) будут потеряны */
+    if( numLine == eRs422_line_1 )
+    {
+        L1_UART_CLEAR_OERR; // сброс переполнения буфера приема UART1.
+    }
+    else
+    {
+        L2_UART_CLEAR_OERR; // сброс переполнения буфера приема UART2.
+    }
+}
+
+//*****************************************************************************
 // Прием и HDLC-декодирование телеграммы по линии связи RS-422
 void inRS422_run( InRS422 *inStr, uint16_t addr )
 {
-    uint8_t data, i, myAddr;
-
-    for( i = 0; i < V_ARRAY_IN_RS422; i++ )
-        inStr->acTimeIn[i]++;
-
-    for( i = 0; i < 4; i++ )
-    { // 4 - количество буферов в UART
-        if( !inStr->inByte( &data ) )
-        {
+    uint8_t data, myAddr, time;
+    
+    while ( true )
+    { 
+        if( inStr->ndxReadReg == inStr->ndxWriteReg )  
             break;
-        }
+        
+        time = inStr->aInReadRegTime[ inStr->ndxReadReg ];
+        data = inStr->aInReadReg[ inStr->ndxReadReg++ ];
+        if ( inStr->ndxReadReg >= V_ARRAY_IN_REG ) 
+            inStr->ndxReadReg = 0;
+        
         switch( inStr->state )
         {
             case eStateInWaitDle: //Ожидание начала телеграммы - байта DLE
                 if( data == DLE )
                 {
                     inStr->state = eStateInStx;
-                    inStr->acTimeIn[inStr->indWriteArray] = 0; //байт DLE принят, сброс таймера
+                    inStr->acTimeIn[inStr->indWriteArray] = time; //байт DLE принят, фиксация времени
                 }
                 break;
 
@@ -96,7 +175,7 @@ void inRS422_run( InRS422 *inStr, uint16_t addr )
                     inStr->state = eStateInWaitDle; //длина телеграммы превышает допустимое значение
                     break;
                 }
-                inStr->aInRS422[inStr->indWriteArray][inStr->indDate++] = data; //запись байта
+                inStr->aInRS422[inStr->indWriteArray][inStr->indDate++] = data; //запись байта                 
                 break;
 
             case eStateInPostDle: //принят байт DLE 
@@ -117,24 +196,22 @@ void inRS422_run( InRS422 *inStr, uint16_t addr )
                     myAddr = false;
                     if( inStr->indDate == 1 )
                     { //короткое сообщение
-
-                        //адрес совпадает
-                        if( ( inStr->aInRS422[inStr->indWriteArray][0] &0x0F ) == ( addr & 0x000F ) ) myAddr = true;
+                        if( ( inStr->aInRS422[inStr->indWriteArray][0] & 0x0F ) == ( addr & 0x000F ) ) myAddr = true; //адрес совпадает
                     }
                     else
                     { //приказ
-                        if( inStr->aInRS422[inStr->indWriteArray][0] == //1-ым идет старший байт
-                            ( addr >> 8 & 0x00FF ) && inStr->aInRS422[inStr->indWriteArray][1] == ( addr & 0x00FF ) )
+                        if( inStr->aInRS422[inStr->indWriteArray][0] == ( addr >> 8 & 0x00FF ) && //первым идет старший байт
+                            inStr->aInRS422[inStr->indWriteArray][1] == ( addr & 0x00FF ) )
                         {
                             myAddr = true;
                         }
                     }
+
                     if( myAddr == true )
                     { //Адрес совпадает
+                        // определяем время начала телеграммы
                         inStr->aLength[inStr->indWriteArray] = inStr->indDate; //запись длины принятой телеграммы
-
-                        //установка индекса следующего массива
-                        if( ++inStr->indWriteArray >= V_ARRAY_IN_RS422 ) inStr->indWriteArray = 0;
+                        if( ++inStr->indWriteArray >= V_ARRAY_IN_RS422 ) inStr->indWriteArray = 0; //установка индекса следующего массива
                         inStr->aLength[inStr->indWriteArray] = 0; //обнуление длины массива
                     }
                 }
@@ -144,23 +221,33 @@ void inRS422_run( InRS422 *inStr, uint16_t addr )
             default:
                 //Ошибка счетчика состояния
                 ERROR_EX_ID( eGrPS_Rs422, ePS_Rs422StepCntError, 0xAAAA, eStepCntError_inRS422_run, 0xBBBB, 0 );
-        }
-    }
+        } //end switch
+    }//end for     
+
 }
 
 //*****************************************************************************
 // Передача телеграммы по линии связи RS-422
-void outRS422_run( OutRS422 *outStr )
+void outRS422_run( OutRS422 *outStr, Rs422_numLine numLine )
 {
-
-    if( outStr->timeOut ) outStr->timeOut--; //декремент таймаута 
+    uint16_t i;
+    
+    if( outStr->timeOut ) 
+        outStr->timeOut--; //декремент тайм-аута 
 
     switch( outStr->state )
     {
         case eStateOutWaitData:
             if( outStr->length && !outStr->timeOut )
             {
-                outStr->manageInOut( OBMEN_PEREDACHA );
+                if ( numLine == eRs422_line_1 ) 
+                {
+                    SET_DE_L1( OBMEN_PEREDACHA );
+                }
+                else 
+                {
+                    SET_DE_L2( OBMEN_PEREDACHA );
+                }
                 outStr->indDate = 0;
                 outStr->state = eStateOutWaitManageOut;
             }
@@ -171,10 +258,25 @@ void outRS422_run( OutRS422 *outStr )
             break;
 
         case eStateOutDataTransmit:
-            while( outStr->outByte( outStr->aOutRS422[outStr->indDate] ) )
+            for ( i = 0; i < 2; i++ ) 
             {
+                if ( numLine == eRs422_line_1 ) 
+                {
+                    if( !L1_UART_IS_READY_OUT ) 
+                    	break;
+                    else 
+                    	L1_UART_REG_OUT = outStr->aOutRS422[outStr->indDate];
+                }
+                else 
+                {
+                    if( !L2_UART_IS_READY_OUT ) 
+                    	break;
+                    else 
+                    	L2_UART_REG_OUT = outStr->aOutRS422[outStr->indDate];
+                } 
                 outStr->indDate++;
-                if( outStr->length > 1 ) outStr->length--;
+                if( outStr->length > 1 ) 
+                    outStr->length--;
                 else
                 { //Передача данных окончена
                     outStr->length = 0;
@@ -185,12 +287,28 @@ void outRS422_run( OutRS422 *outStr )
             break;
 
         case eStateOutWaitEndTransmit:
-            if( !outStr->transmCompl( ) ) break;
+            if ( numLine == eRs422_line_1 ) 
+            {
+                if( !L1_UART_IS_END_OUT ) 
+                    break;
+            }
+            else 
+            {
+                if( !L2_UART_IS_END_OUT ) 
+                    break;
+            }
             outStr->state = eStateOutEnd;
             break;
 
         case eStateOutEnd:
-            outStr->manageInOut( OBMEN_PRIEM );
+            if ( numLine == eRs422_line_1 ) 
+            {
+                SET_DE_L1( OBMEN_PRIEM );
+            }
+            else 
+            {
+                SET_DE_L2( OBMEN_PRIEM );
+            }
             outStr->state = eStateOutWaitData;
             break;
 
@@ -204,26 +322,40 @@ void outRS422_run( OutRS422 *outStr )
 uint8_t formAlarmRS422( uint8_t nCycle, uint8_t *alarmArray )
 {
     static uint8_t nCycleOld, alarmOld, index;
+    static uint8_t retCode;
+    static bool isMessage;
 
     if( nCycleOld != nCycle )
     {
         nCycleOld = nCycle;
-
-        if( alarmArray[0] == 0 )
-        {
-            alarmOld = index = 0;
+        if ( isMessage )
+        { // сообщение о версии
+            retCode = MessageVersion_get();
+            isMessage = false;
         }
         else
-        {
-            if( alarmOld == alarmArray[index] )
-                if( ++index == MAX_ALARM_COUNT )
+        { // формирование аларма    
+            if( alarmArray[0] == 0 )
+            {
+                alarmOld = index = 0;
+            }
+            else
+            {
+                if( alarmOld == alarmArray[index] )
+                    if( ++index == MAX_ALARM_COUNT )
+                        index = 0;
+                if( alarmArray[index] == 0 )
                     index = 0;
-            if( alarmArray[index] == 0 )
-                index = 0;
-            alarmOld = alarmArray[index];
+                alarmOld = alarmArray[index];
+            }
+            retCode = alarmOld;
+            
+#ifdef RS422_ALARM_OUT_VERSION            
+            isMessage = true;
+#endif            
         }
     }
-    return alarmOld;
+    return retCode;
 }
 
 //*****************************************************************************
@@ -322,10 +454,14 @@ uint8_t InRS422_getTele( InRS422 *inStr,
     if( inStr->aLength[inStr->indReadArray] == 0 ) return ret;
     //Телеграмма принята, считывание из буфера
     *aTele = &inStr->aInRS422[inStr->indReadArray][0];
-    *ptrTime = inStr->acTimeIn[inStr->indReadArray];
+    //*ptrTime = inStr->acTimeIn[inStr->indReadArray];
     ret = inStr->aLength[inStr->indReadArray];
+    *ptrTime = ( inStr->cInReadRegTime > inStr->acTimeIn[inStr->indReadArray] ) ?
+                 inStr->cInReadRegTime - inStr->acTimeIn[inStr->indReadArray]   :
+                 inStr->cInReadRegTime + (0xFF - inStr->acTimeIn[inStr->indReadArray] );
     inStr->aLength[inStr->indReadArray] = 0; //Обнуление признака наличия телеграммы
-    if( ++inStr->indReadArray >= V_ARRAY_IN_RS422 ) inStr->indReadArray = 0; //Инкремент индекса чтения
+    if( ++inStr->indReadArray >= V_ARRAY_IN_RS422 ) 
+        inStr->indReadArray = 0; //Инкремент индекса чтения
     return ret;
 }
 
@@ -397,4 +533,27 @@ uint8_t formTeleStatus( uint8_t *aTele, uint8_t type, uint16_t adrOK,
 * 
 * Изменения:
 *    Базовая версия.
+* 
+* Версия 1.0.2
+* Дата   29-12-2020
+* Автор  Третьяков В.Ж.
+* 
+* Изменения:
+*    1. Связаны с переносом функций драйвера RS422 в этот модуль.
+*    2. Связаны с переносом HDLC-декодирования из прерываний в главный цикл.
+*    3. Устранена ошибка по счету времени от начала приема телеграммы.
+*
+* Версия 1.0.3
+* Дата   25-02-2021
+* Автор  Третьяков В.Ж.
+* 
+* Изменения: 
+*    Сброс флага переполнения после вычитки буфера приема.
+*
+* Версия 1.0.4
+* Дата   15-03-2021
+* Автор  Третьяков В.Ж.
+* 
+* Изменения: 
+*    В функции formAlarmRS422() добавлена передача номера версии и даты сборки ПО.
 */

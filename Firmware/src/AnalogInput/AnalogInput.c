@@ -2,8 +2,8 @@
 * \file    AnalogInput.c
 * \brief   \copybrief AnalogInput.h
 *
-* \version 1.0.1
-* \date    20-06-2018
+* \version 1.0.2
+* \date    15-03-2021
 * \author  Агулов М.А.
 */
 
@@ -16,9 +16,10 @@
 #include "Adc.h"
 #include "ProtectionState_codes.h"
 #include "asserts_ex.h"
+#include "CheckCallFunctions.h"
 
 //*****************************************************************************
-// Определение типов данных
+// Объявление типов данных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -51,7 +52,7 @@ typedef struct tagAnalogInputData
 } AnalogInputData;
 
 //*****************************************************************************
-// Определение локальных переменных
+// Объявление локальных переменных
 //*****************************************************************************
 
 //*****************************************************************************
@@ -139,7 +140,7 @@ void AnalogInput_run( void )
     uint16_t samplesCnt = 0;
 
     // Чтение данных из буфера АЦП. После выполнения цикла в переменной samplesCnt
-    // содержит количествы прочитанных отсчётов
+    // содержит количество прочитанных отсчётов
     while( Adc_isReady() )
     {
         // AnalogInput_run за один проход по main должен вычитать все данные с АЦП.
@@ -151,8 +152,9 @@ void AnalogInput_run( void )
     // Обработка данных
     for( uint16_t i = 0; i < eAinChCount; i++ )
     {
-        // Мгновенное значение сигнала на входе АЦП (данные с буфера АЦП)
-        analogInputData[i].values.value = adcData[samplesCnt - 1][i];           
+        // Мгновенное значение сигнала на входе АЦП (данные из очереди АЦП). Если несколько выборок в очереди -
+        // берётся последние значение из очереди. Если нет новых данных в очереди - остаётся предыдущее значение.
+        samplesCnt == 0 ?: (analogInputData[i].values.value = adcData[samplesCnt - 1][i]);       
 
         switch( analogInputData[i].settings.script )                            // Дополнительная обработка сигнала
         {
@@ -167,7 +169,7 @@ void AnalogInput_run( void )
                 {
                     analogInputData[i].measuring.sum = analogInputData[i].measuring.sum
                         - analogInputData[i].measuring.buf[analogInputData[i].measuring.idx]            // Вычитание старого значения 
-                        + adcData[sample][i];                                                           // Суммирование с новым значенем
+                        + adcData[sample][i];                                                           // Суммирование с новым значением
 
                     // Запись нового значения в буфер окна усреднения
                     analogInputData[i].measuring.buf[analogInputData[i].measuring.idx++] = adcData[sample][i];
@@ -197,7 +199,7 @@ void AnalogInput_run( void )
                         analogInputData[i].measuring.sum = analogInputData[i].measuring.sum
                             - __builtin_mulss( analogInputData[i].measuring.buf[analogInputData[i].measuring.idx], 
                             analogInputData[i].measuring.buf[analogInputData[i].measuring.idx] )
-                            + __builtin_mulss( samples[sample], samples[sample] ); // Сложение с новым значенем
+                            + __builtin_mulss( samples[sample], samples[sample] ); // Сложение с новым значением
                     #else
                         // Вычитание старого значения
                         analogInputData[i].measuring.sum = analogInputData[i].measuring.sum
@@ -222,14 +224,9 @@ void AnalogInput_run( void )
                 break;
         }
     }
+    MARKED_CALL_FUNCTION;
 }
 
-//*****************************************************************************
-// Управление дискретизацией сигналов
-void AnalogInput_runInterrupt( void )
-{
-    Adc_run( );
-}
 
 //*****************************************************************************
 /**
@@ -241,4 +238,11 @@ void AnalogInput_runInterrupt( void )
 * 
 * Изменения:
 *     Базовая версия.
+*
+* Версия 1.0.2
+* Дата   15-03-2021
+* Автор  Агулов М.А.
+* 
+* Изменения:
+*   Функция AnalogInput_runInterrupt() убрано, т.к. АЦП работает с DMA
 */
